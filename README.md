@@ -1,7 +1,9 @@
 RenderChan
 ==========
 
-<img src="http://artwork.morevnaproject.org/albums/2016-06-13-renderchan-logo-v2/2016-06-13-logo-alpha.png" alt="RenderChan Logo" height=330 title="RenderChan mascot by Anastasia Majzhegisheva" />
+Website: https://morevnaproject.org/renderchan/
+
+<img src="https://morevnaproject.org/wp-content/uploads/2017/08/renderchan-console.png" alt="RenderChan Logo" height=330 title="RenderChan mascot by Anastasia Majzhegisheva" />
 
 RenderChan is a smart rendering manager for animation projects. It takes a file for rendering  and analyses all its dependencies. If any of the dependent files needs to be rendered (or changed since the last rendering), then dependency is submitted for rendering together with an original file.
 
