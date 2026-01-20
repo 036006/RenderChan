@@ -24,6 +24,7 @@ class RenderChanNukeModule(RenderChanModule):
         self.conf["maxNbCores"] = 0  # Use all available cores
         
         # Extra params
+        self.extraParams["mode"] = "nukex"  # nuke | nukex | studio
         self.extraParams["single"] = "None"
         self.extraParams["write_node"] = ""  # Specific Write node to render
         self.extraParams["proxy"] = "0"  # Use proxy mode
@@ -342,7 +343,19 @@ class RenderChanNukeModule(RenderChanModule):
 
         try:
             # Build command line
+            mode = extraParams.get("mode", "nukex").strip().lower()
+            mode_flags = {
+                "nuke": [],
+                "nukex": ["--nukex"],
+                "studio": ["--studio"],
+            }
+            if mode not in mode_flags:
+                print("Unknown Nuke mode '%s', falling back to 'nukex'" % mode)
+                mode = "nukex"
+
             commandline = [self.conf['binary']]
+            commandline.extend(mode_flags[mode])
+            print("Selected Nuke mode: %s" % mode)
             
             # Choose execution mode:
             # -t = terminal mode (requires render license)
