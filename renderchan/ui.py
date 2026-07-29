@@ -159,6 +159,8 @@ def intro(title: str) -> None:
     global _indent
     if _VERBOSE:
         return
+    if _progress is not None:
+        _progress.close_phase()
     _write(f"{DM}{G['corner_tl']}{RST}  {title}")
     _indent += 1
 
