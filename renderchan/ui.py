@@ -135,49 +135,67 @@ def format_duration(seconds: float) -> str:
     return "%02d:%02d:%02d" % (t // 3600, (t % 3600) // 60, t % 60)
 
 
+_indent = 0  # block nesting depth (quiet mode); each level adds a rail prefix
+
+
+def _prefix() -> str:
+    return "".join(f"{DM}{G['rail']}{RST}  " for _ in range(_indent))
+
+
+def _rail() -> str:
+    return f"{DM}{G['rail']}{RST}  " if _indent == 0 else ""
+
+
 def _write(message: str) -> None:
     if _progress is not None:
         _progress.interrupt()
-    sys.stdout.write(message + "\n")
+    sys.stdout.write(_prefix() + message + "\n")
     sys.stdout.flush()
 
 
 # --------------------------------------------------- clack-like scaffold ----
 
 def intro(title: str) -> None:
+    global _indent
     if _VERBOSE:
         return
     _write(f"{DM}{G['corner_tl']}{RST}  {title}")
+    _indent += 1
 
 
 def outro(message: str = "") -> None:
+    global _indent
     if _VERBOSE:
         return
+    if _progress is not None:
+        _progress.close_phase()
+    if _indent > 0:
+        _indent -= 1
     _write(f"{DM}{G['corner_bl']}{RST}  {message}")
 
 
 def log_success(message: str) -> None:
     if _VERBOSE:
         return
-    _write(f"{DM}{G['rail']}{RST}  {GRN}{G['phase_done']}{RST} {message}")
+    _write(f"{_rail()}{GRN}{G['phase_done']}{RST} {message}")
 
 
 def log_info(message: str) -> None:
     if _VERBOSE:
         return
-    _write(f"{DM}{G['rail']}{RST}  {BLU}{G['info_dot']}{RST} {message}")
+    _write(f"{_rail()}{BLU}{G['info_dot']}{RST} {message}")
 
 
 def log_warn(message: str) -> None:
     if _VERBOSE:
         return
-    _write(f"{DM}{G['rail']}{RST}  {YLW}{G['warn']}{RST} {message}")
+    _write(f"{_rail()}{YLW}{G['warn']}{RST} {message}")
 
 
 def rail_blank() -> None:
     if _VERBOSE:
         return
-    _write(f"{DM}{G['rail']}{RST}")
+    _write(f"{_rail()}")
 
 
 def quiet_subprocess() -> dict:
@@ -219,7 +237,7 @@ def warn(message) -> None:
     if _VERBOSE:
         _write("Warning: %s" % message)
     else:
-        _write(f"{DM}{G['rail']}{RST}  {YLW}{G['warn']}{RST} {message}")
+        _write(f"{_rail()}{YLW}{G['warn']}{RST} {message}")
 
 
 def error(message, stderr=False) -> None:
@@ -227,7 +245,7 @@ def error(message, stderr=False) -> None:
         stream = sys.stderr if stderr else sys.stdout
         print("ERROR: %s" % message, file=stream)
     else:
-        _write(f"{DM}{G['rail']}{RST}  {RED}{G['err']}{RST} {message}")
+        _write(f"{_rail()}{RED}{G['err']}{RST} {message}")
 
 
 # ------------------------------------------------------ shimmer progress ----
@@ -310,6 +328,12 @@ class ShimmerProgress:
             self._print_phase_done_locked()
             sys.stdout.flush()
 
+    def close_phase(self) -> None:
+        """Print the done-line of the currently open phase, if any."""
+        with self._lock:
+            self._print_phase_done_locked()
+            sys.stdout.flush()
+
     def interrupt(self) -> None:
         """Erase the animation line so a permanent line can be printed cleanly."""
         with self._lock:
@@ -321,8 +345,8 @@ class ShimmerProgress:
 
     def _print_phase_start_locked(self, phase_name: str) -> None:
         prefix = "\r\x1b[K" if self._tty else ""
-        title = f"{phase_name} {self._context}" if self._context else phase_name
-        sys.stdout.write(f"{prefix}{DM}{G['corner_tl']}{RST}  {title}\n")
+        title = f"{phase_name} {self._context}" if self._context and _indent == 0 else phase_name
+        sys.stdout.write(f"{prefix}{_prefix()}{DM}{G['corner_tl']}{RST}  {title}\n")
         sys.stdout.flush()
 
     def _print_phase_done_locked(self) -> None:
@@ -333,7 +357,7 @@ class ShimmerProgress:
             detail = "  %s found" % f"{self._count:,}".replace(",", " ")
         else:
             detail = "  done"
-        sys.stdout.write(f"{prefix}{DM}{G['corner_bl']}{RST}{detail}\n")
+        sys.stdout.write(f"{prefix}{_prefix()}{DM}{G['corner_bl']}{RST}{detail}\n")
         sys.stdout.flush()
         self._phase_name, self._percent, self._count = "", -1, 0
 
@@ -356,14 +380,14 @@ class ShimmerProgress:
             filled = round(_BAR_WIDTH * self._anim_percent / 100)
             empty = _BAR_WIDTH - filled
             bar = self._render_bar(frame, filled, empty)
-            line = (f"{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
+            line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
                     f"{self._msg}  {bar}  {self._anim_percent}%")
         elif self._anim_count > 0:
             count = f"{self._anim_count:,} found".replace(",", " ")
-            line = (f"{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
+            line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
                     f"{self._msg}... {count}")
         else:
-            line = f"{DM}{G['rail']}{RST}  {color}{glyph}{RST} {self._msg}..."
+            line = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} {self._msg}..."
 
         sys.stdout.write(f"\r\x1b[K{line}")
         sys.stdout.flush()
