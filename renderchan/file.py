@@ -17,7 +17,10 @@ class RenderChanFile():
         if self.projectPath!='':
             self.project=projects.get(self.projectPath)
         else:
-            ui.warn("File %s doesn't belong to any project." % (path))
+            # Quiet: missing files are already covered by the "Missing dependencies"
+            # block; warn only for existing files (unique info there)
+            if ui.is_verbose() or os.path.exists(path):
+                ui.warn("File %s doesn't belong to any project." % (path))
 
         # Associated tasks
         self.taskPost=None
@@ -111,7 +114,9 @@ class RenderChanFile():
                     self.setFormat(ext)
 
             else:
-                ui.warn("No source file found for %s" % path)
+                # Quiet: covered by the "Missing dependencies" block
+                if ui.is_verbose():
+                    ui.warn("No source file found for %s" % path)
 
     def _loadConfig(self, filename):
 

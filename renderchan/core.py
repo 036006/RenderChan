@@ -240,10 +240,26 @@ class RenderChan():
                 # before any rendering starts. Analysis is cached, so this costs almost nothing.
                 self._counting_deps = True
                 self._counted_deps = set()
-                self.parseDirectDependency(taskfile, None, True, self.force)
+                self._missing_deps = []
+                # Warnings are muted here: the real pass below will show them once
+                ui.set_muted(True)
+                try:
+                    self.parseDirectDependency(taskfile, None, True, self.force)
+                finally:
+                    ui.set_muted(False)
                 self._counting_deps = False
                 ui.progress_stop()
                 ui.progress_start()  # restart for the rendering phases
+                if self._missing_deps:
+                    ui.intro("Missing dependencies")
+                    parents = {}
+                    for parent, dep in self._missing_deps:
+                        parents.setdefault(parent, []).append(dep)
+                    for parent, deps in parents.items():
+                        ui.log_warn(parent)
+                        for dep in deps:
+                            ui.log_line("- " + dep)
+                    ui.outro("%d missing" % len(self._missing_deps))
 
             if stereo in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
 
@@ -767,11 +783,9 @@ class RenderChan():
 
             for path in deps:
                 path = os.path.abspath(path)
-                new_dep = False
                 if parsed_deps is not None and path in parsed_deps and path not in self._counted_deps:
                     self._counted_deps.add(path)
                     ui.progress_tick("Resolving dependencies")
-                    new_dep = True
                 if path in self.loadedFiles.keys():
                     dependency = self.loadedFiles[path]
                     if dependency.pending:
@@ -795,9 +809,12 @@ class RenderChan():
                                 ui.info("   Skipping file %s..." % path)
                         else:
                             ui.info("   Skipping file %s..." % path)
-                        if not os.path.exists(dependency.getPath()) and getattr(self, '_counting_deps', False) and new_dep:
-                            ui.log_warn("Missing: %s" % (
-                                os.path.relpath(path, taskfile.project.path) if taskfile.project else path))
+                        if not os.path.exists(dependency.getPath()) and getattr(self, '_counting_deps', False):
+                            pair = (
+                                os.path.relpath(taskfile.getPath(), taskfile.project.path) if taskfile.project else taskfile.getPath(),
+                                os.path.relpath(path, taskfile.project.path) if taskfile.project else path)
+                            if pair not in self._missing_deps:
+                                self._missing_deps.append(pair)
                         continue
                     self.loadedFiles[dependency.getPath()]=dependency
                     if dependency.project!=None and dependency.module!=None:
