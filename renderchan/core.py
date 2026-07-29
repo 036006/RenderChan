@@ -257,8 +257,8 @@ class RenderChan():
                         parents.setdefault(parent, []).append(dep)
                     for parent, deps in parents.items():
                         ui.log_warn(parent)
-                        for dep in deps:
-                            ui.log_line("- " + dep)
+                        for line in ui.compress_paths(deps):
+                            ui.log_line("- " + line)
                     ui.outro("%d missing" % len(self._missing_deps))
 
             if stereo in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):

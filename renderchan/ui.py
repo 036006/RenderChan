@@ -18,6 +18,7 @@ main thread is busy rendering.
 import colorsys
 import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -140,6 +141,45 @@ def format_duration(seconds: float) -> str:
     """Format seconds as HH:MM:SS."""
     t = int(seconds)
     return "%02d:%02d:%02d" % (t // 3600, (t % 3600) // 60, t % 60)
+
+
+def compress_paths(paths):
+    """Collapse numbered sequences (frame0001.png ...) into ranges for display.
+
+    Runs of >= 3 consecutive numbers sharing dir/prefix/suffix become
+    'dir/prefix{first}-{last}{suffix} (N files)'; everything else stays as-is.
+    """
+    numbered = {}
+    plain = []
+    pat = re.compile(r"^(.*/)?([^\d/]*?)(\d+)([^\d/]*)$")
+    for path in paths:
+        m = pat.match(path)
+        if not m:
+            plain.append(path)
+            continue
+        key = (m.group(1) or '', m.group(2), m.group(4))
+        numbered.setdefault(key, []).append((int(m.group(3)), len(m.group(3))))
+    out = []
+    for (dirn, prefix, suffix), nums in numbered.items():
+        nums = sorted(set(nums))
+        start = prev = nums[0]
+        runs = []
+        for n in nums[1:]:
+            if n[0] == prev[0] + 1:
+                prev = n
+            else:
+                runs.append((start, prev))
+                start = prev = n
+        runs.append((start, prev))
+        for start, end in runs:
+            if end[0] - start[0] + 1 >= 3:
+                out.append("%s%s%0*d-%0*d%s (%d files)" % (
+                    dirn, prefix, start[1], start[0], end[1], end[0], suffix, end[0] - start[0] + 1))
+            else:
+                for n in range(start[0], end[0] + 1):
+                    out.append("%s%s%d%s" % (dirn, prefix, n, suffix))
+    out.extend(plain)
+    return out
 
 
 _indent = 0  # block nesting depth (quiet mode); each level adds a rail prefix
