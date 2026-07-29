@@ -4,6 +4,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import which
+from renderchan import ui
 import subprocess
 import os
 import random
@@ -30,6 +31,6 @@ class RenderChanFfmpegModule(RenderChanModule):
         # TODO: Progress callback
 
         commandline=[self.conf['binary'], "-i", filename, os.path.join(outputPath,"output_%04d.png")]
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         updateCompletion(1.0)

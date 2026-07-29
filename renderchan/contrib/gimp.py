@@ -4,6 +4,7 @@ __author__ = 'scribblemaniac'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import which
+from renderchan import ui
 import subprocess
 import os
 import re
@@ -87,6 +88,6 @@ class RenderChanGimpModule(RenderChanModule):
         # See docs for readable script-fu code
         commandline=[self.conf['binary'], "-i", "-b", "(let*  ((filename \"%s\") (outpath \"%s\") (image (car (gimp-file-load RUN-NONINTERACTIVE filename filename))) (drawable (car (%s)))) %s (gimp-image-scale image %s %s) (%s RUN-NONINTERACTIVE image drawable outpath outpath %s) (gimp-image-delete image))" % (filename, outputPath, drawable, preprocedure, width_arg, height_arg, saveProcedure, saveParameters), "-b", "(gimp-quit 0)"]
 
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         updateCompletion(1.0)

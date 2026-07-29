@@ -2,6 +2,7 @@ __author__ = '036006'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import is_true_string
+from renderchan import ui
 import subprocess
 import os, sys
 import errno
@@ -37,7 +38,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         try:
             lines = self._read_file_lines(filename)
         except IOError as e:
-            print("Error reading AnimeStudio9 file %s: %s" % (filename, str(e)))
+            ui.error("Error reading AnimeStudio9 file %s: %s" % (filename, str(e)))
             return info
 
         frame_pattern = re.compile(r"^frame_range\s+(\d+)\s+(\d+)")
@@ -66,7 +67,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             if match:
                 info["fps"] = int(match.group(1))
                 self._last_fps = info["fps"]
-                print("    AnimeStudio9 fps: %d" % info["fps"])
+                ui.info("    AnimeStudio9 fps: %d" % info["fps"])
                 continue
 
             match = dimensions_pattern.match(stripped)
@@ -87,7 +88,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             self._last_fps = None
 
         if len(dependencies) > 0:
-            print("    AnimeStudio9 dependencies: %d" % len(dependencies))
+            ui.info("    AnimeStudio9 dependencies: %d" % len(dependencies))
             info["dependencies"] = dependencies
         return info
 
@@ -106,21 +107,21 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         layer_comp_enabled = is_true_string(layer_comp_value) or layer_comp_value.upper() == "ALL"
 
         if layer_comp_enabled:
-            print('====================================================')
-            print('  AnimeStudio9 layer_composition: enabled (%s)' % layer_comp_value)
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 layer_composition: enabled (%s)' % layer_comp_value)
             if file_lines is None:
                 file_lines = self._read_file_lines(filename)
             compositions = self._parse_layer_compositions(file_lines)
             target_folder = outputPath
 
             comp_names = [name for name, _ in compositions]
-            print('====================================================')
-            print('  AnimeStudio9 compositions: %d' % len(comp_names))
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 compositions: %d' % len(comp_names))
             if comp_names:
-                print('   ' + ', '.join(comp_names))
+                ui.info('   ' + ', '.join(comp_names))
             else:
-                print('   (no compositions found)')
-            print('====================================================')
+                ui.info('   (no compositions found)')
+            ui.info('====================================================')
 
             if compositions:
                 for comp_name, layer_ids in compositions:
@@ -130,9 +131,9 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             else:
                 render_tasks.append((filename, target_folder))
         else:
-            print('====================================================')
-            print('  AnimeStudio9 layer_composition: DISABLED')
-            print('====================================================')
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 layer_composition: DISABLED')
+            ui.info('====================================================')
             render_tasks.append((filename, outputPath))
 
         total_tasks = float(len(render_tasks))
@@ -195,10 +196,10 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             commandline.append("-halfsize")
             commandline.append("yes")
 
-        print('====================================================')
-        print('  AnimeStudio9 Render Command:')
-        print('  ' + ' '.join(commandline))
-        print('====================================================')
+        ui.info('====================================================')
+        ui.info('  AnimeStudio9 Render Command:')
+        ui.info('  ' + ' '.join(commandline))
+        ui.info('====================================================')
 
         out = subprocess.Popen(commandline, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         rc = None
@@ -216,17 +217,17 @@ class RenderChanAnimestudio9Module(RenderChanModule):
                     rc = out.poll()
                     continue
 
-                print(line_decoded, end='')
+                ui.info(line_decoded.rstrip())
                 sys.stdout.flush()
 
                 rc = out.poll()
 
-        print('====================================================')
+        ui.info('====================================================')
         if rc == 0:
-            print('  AnimeStudio9 render completed successfully')
+            ui.info('  AnimeStudio9 render completed successfully')
         else:
-            print('  AnimeStudio9 command returns with code %d' % rc)
-        print('====================================================')
+            ui.info('  AnimeStudio9 command returns with code %d' % rc)
+        ui.info('====================================================')
 
         if rc != 0:
             raise Exception('AnimeStudio9 render failed with exit code %d' % rc)

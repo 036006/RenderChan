@@ -4,6 +4,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import is_true_string
+from renderchan import ui
 from distutils.version import StrictVersion
 import subprocess
 import tempfile
@@ -51,7 +52,7 @@ class RenderChanPencil2dModule(RenderChanModule):
                 self.active = False
 
             if self.active == False:
-                print("WARNING: Failed to initialize Pencil2D module. The possible reasons for that could be: missing X connection, or the version of Pencil2D on your system is unsupported (too old?). In latter case please consider to get latest version at https://www.pencil2d.org/.")
+                ui.warn("Failed to initialize Pencil2D module. The possible reasons for that could be: missing X connection, or the version of Pencil2D on your system is unsupported (too old?). In latter case please consider to get latest version at https://www.pencil2d.org/.")
 
         return self.active
 
@@ -109,7 +110,7 @@ class RenderChanPencil2dModule(RenderChanModule):
         else:
             commandline=[self.conf['binary'], filename, "--export-sequence", output]
 
-        print(commandline)
-        subprocess.check_call(commandline)
+        ui.info(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         updateCompletion(1.0)

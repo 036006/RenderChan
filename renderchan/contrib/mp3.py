@@ -4,6 +4,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import which
+from renderchan import ui
 import subprocess
 import os
 import re
@@ -25,13 +26,13 @@ class RenderChanMp3Module(RenderChanModule):
     def checkRequirements(self):
         if which(self.conf['binary']) == None:
             self.active=False
-            print("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf['binary']))
-            print("    Please install mpg123 package.")
+            ui.info("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf['binary']))
+            ui.info("    Please install mpg123 package.")
             return False
         if which(self.conf['sox_binary']) == None:
             self.active=False
-            print("Module warning (%s): Cannot find '%s' executable!" % (self.getName(), self.conf['sox_binary']))
-            print("    Please install sox package.")
+            ui.info("Module warning (%s): Cannot find '%s' executable!" % (self.getName(), self.conf['sox_binary']))
+            ui.info("    Please install sox package.")
             return False
         self.active=True
         return True
@@ -47,10 +48,10 @@ class RenderChanMp3Module(RenderChanModule):
         # TODO: Progress callback
 
         commandline=[self.conf['binary'], "-w", tmpfile, filename]
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         commandline=[self.conf['sox_binary'], tmpfile, outputPath, "rate", "-v", extraParams["audio_rate"]]
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         os.remove(tmpfile)
 

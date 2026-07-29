@@ -1,6 +1,7 @@
 __author__ = '036006'
 
 from renderchan.module import RenderChanModule
+from renderchan import ui
 import subprocess
 import os, sys
 import re
@@ -191,7 +192,7 @@ class RenderChanNukeModule(RenderChanModule):
             with open(filename, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
         except IOError as e:
-            print("Error reading Nuke script %s: %s" % (filename, str(e)))
+            ui.error("Error reading Nuke script %s: %s" % (filename, str(e)))
             return info
         
         dirName = os.path.dirname(filename)
@@ -225,7 +226,7 @@ class RenderChanNukeModule(RenderChanModule):
         if startFrame is not None and endFrame is not None:
             info["startFrame"] = startFrame
             info["endFrame"] = endFrame
-            print("    Nuke script frame range (FrameRange node): %d to %d" % (startFrame, endFrame))
+            ui.info("    Nuke script frame range (FrameRange node): %d to %d" % (startFrame, endFrame))
         
         # Parse Root node for frame range
         if startFrame is None or endFrame is None:
@@ -236,11 +237,11 @@ class RenderChanNukeModule(RenderChanModule):
                 if endFrameMatch:
                     info["startFrame"] = 1
                     info["endFrame"] = int(endFrameMatch.group(1).strip())
-                    print("    Nuke script frame range (Root node): %d to %d" % (info["startFrame"], info["endFrame"]))
+                    ui.info("    Nuke script frame range (Root node): %d to %d" % (info["startFrame"], info["endFrame"]))
 
         # Parse Read nodes for dependencies
         readMatches = list(readNodePattern.finditer(content))
-        print("    Found %d Read nodes" % len(readMatches))
+        ui.info("    Found %d Read nodes" % len(readMatches))
 
         for readMatch in readMatches:
             readContent = self._extract_node_content(content, readMatch.end())
@@ -350,12 +351,12 @@ class RenderChanNukeModule(RenderChanModule):
                 "studio": ["--studio"],
             }
             if mode not in mode_flags:
-                print("Unknown Nuke mode '%s', falling back to 'nukex'" % mode)
+                ui.warn("Unknown Nuke mode '%s', falling back to 'nukex'" % mode)
                 mode = "nukex"
 
             commandline = [self.conf['binary']]
             commandline.extend(mode_flags[mode])
-            print("Selected Nuke mode: %s" % mode)
+            ui.info("Selected Nuke mode: %s" % mode)
             
             # Choose execution mode:
             # -t = terminal mode (requires render license)
@@ -369,17 +370,17 @@ class RenderChanNukeModule(RenderChanModule):
             if extraParams.get("disable_gpu", "0") != "1" and os.environ.get("NUKE_DISABLE_GPU") != "1":
                 commandline.append("--gpu")
             else:
-                print("================== FORCE DISABLE GPU =====================")
+                ui.info("================== FORCE DISABLE GPU =====================")
             
             # Execute script and exit
             commandline.append("-x")
             # Execute the Python script
             commandline.append(renderScript)
             
-            print('====================================================')
-            print('  Nuke Render Command:')
-            print('  ' + ' '.join(commandline))
-            print('====================================================')
+            ui.info('====================================================')
+            ui.info('  Nuke Render Command:')
+            ui.info('  ' + ' '.join(commandline))
+            ui.info('====================================================')
             
             env = os.environ.copy()
             env["PYTHONPATH"] = ""
@@ -409,7 +410,7 @@ class RenderChanNukeModule(RenderChanModule):
                 if 'no active write operators' in lineLower or 'total render time' in lineLower:
                     continue
                 
-                print(line, end='')
+                ui.info(line.rstrip())
                 sys.stdout.flush()
                 
                 # Parse progress
@@ -435,17 +436,17 @@ class RenderChanNukeModule(RenderChanModule):
                 
                 rc = out.poll()
             
-            print('====================================================')
+            ui.info('====================================================')
             if rc == 0 or framesWritten:
-                print('  Nuke render completed successfully')
+                ui.info('  Nuke render completed successfully')
             else:
-                print('  Nuke command returns with code %d' % rc)
-            print('====================================================')
+                ui.info('  Nuke command returns with code %d' % rc)
+            ui.info('====================================================')
             
             # Nuke returns code 1 with "no active Write operators" warning even after successful render
             # If we successfully wrote frames, ignore this error
             if rc != 0 and not framesWritten:
-                print('  Nuke command failed...')
+                ui.error('Nuke command failed...')
                 raise Exception('Nuke render failed with exit code %d' % rc)
             
             updateCompletion(1.0)

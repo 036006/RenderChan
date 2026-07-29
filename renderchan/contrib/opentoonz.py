@@ -4,6 +4,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import which
+from renderchan import ui
 import subprocess
 import os
 import random
@@ -48,12 +49,12 @@ class RenderChanOpentoonzModule(RenderChanModule):
         os.chdir(os.path.dirname(self.conf['binary']))
         
         commandline=[self.conf['binary'], filename, "-o", os.path.join(img_outputPath, "image."+img_format), "-nthreads", extraParams['nthreads'], "-step", extraParams['step'], "-shrink", extraParams['shrink'], "-multimedia", extraParams['multimedia']]
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
         
         if format == "avi":
             #TODO: Detect frame rate!
             commandline=[self.findBinary("ffmpeg"), "-r", "24", "-f", "image2", "-i", os.path.join(img_outputPath, "image.%04d."+img_format), "-c:v", "libx264", outputPath]
-            subprocess.check_call(commandline)
+            subprocess.check_call(commandline, **ui.quiet_subprocess())
             shutil.rmtree(img_outputPath)
 
         updateCompletion(1.0)
