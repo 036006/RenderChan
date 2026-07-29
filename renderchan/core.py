@@ -12,6 +12,7 @@ from renderchan.utils import touch
 from renderchan.utils import copytree
 from renderchan.utils import which
 from renderchan.utils import is_true_string
+from renderchan import ui
 import os, time
 import shutil
 import subprocess
@@ -29,7 +30,7 @@ class RenderChan():
         self.renderfarm_host = "127.0.0.1"
         self.renderfarm_port = 8004
 
-        print("RenderChan initialized.")
+        ui.info("RenderChan initialized.")
         self.start_time = time.time()
         self.projects = RenderChanProjectManager()
         self.modules = RenderChanModuleManager()
@@ -87,10 +88,10 @@ class RenderChan():
             minutes = int(t/60)
             t = t - minutes*60
             seconds = int(t)
-            print()
-            print()
-            print("Execution time: %02d:%02d:%02d " % ( hours, minutes, seconds ))
-            print()
+            ui.blank()
+            ui.blank()
+            ui.info("Execution time: %02d:%02d:%02d " % ( hours, minutes, seconds ))
+            ui.blank()
 
     def setHost(self, host):
         self.renderfarm_host=host
@@ -147,20 +148,16 @@ class RenderChan():
         self.trackFileBegin(taskfile)
 
         if taskfile.project == None:
-            print(file=sys.stderr)
-            print("ERROR: Can't render a file which is not a part of renderchan project.", file=sys.stderr)
-            print(file=sys.stderr)
+            ui.error("Can't render a file which is not a part of renderchan project.", stderr=True)
             self.trackFileEnd()
             return 1
 
         if not taskfile.module:
-            print(file=sys.stderr)
             extension = os.path.splitext(taskfile.getPath())[1]
             if extension:
-                print("ERROR: The '%s' file type was not recoginized." % extension, file=sys.stderr)
+                ui.error("The '%s' file type was not recoginized." % extension, stderr=True)
             else:
-                print("ERROR: The provided file does not have an extension.", file=sys.stderr)
-            print(file=sys.stderr)
+                ui.error("The provided file does not have an extension.", stderr=True)
             self.trackFileEnd()
             return 1
 
@@ -168,10 +165,10 @@ class RenderChan():
 
             self.addToGraph(taskfile, dependenciesOnly, allocateOnly)
 
-            print()
+            ui.blank()
             for file in self.trackedFiles.values():
                 print("File: "+file["source"])
-            print()
+            ui.blank()
 
             # Close cache
             for path in self.projects.list.keys():
@@ -190,23 +187,23 @@ class RenderChan():
             #    list[i]=c[len(commonpath)+1:]
             #    print(list[i])
 
-            print()
+            ui.blank()
 
             zipname = os.path.basename(taskfile.getPath())+'.zip'
 
             if os.path.exists(os.path.join(os.getcwd(),zipname)):
-                print("ERROR: File "+os.path.join(os.getcwd(),zipname)+" already exists.")
+                ui.error("File "+os.path.join(os.getcwd(),zipname)+" already exists.")
                 sys.exit()
 
 
             with zipfile.ZipFile(zipname, 'x') as myzip:
                 for i,c in enumerate(list):
-                    print("Zipping file: "+c)
+                    ui.info("Zipping file: "+c)
                     myzip.write(c, c[len(commonpath)+1:])
 
 
             print("Written "+os.path.join(os.getcwd(),zipname)+".")
-            print()
+            ui.blank()
 
             # Close cache
             for path in self.projects.list.keys():
@@ -216,7 +213,7 @@ class RenderChan():
 
             if self.renderfarm_engine=="afanasy":
                 if not os.path.exists(os.path.join(self.cgru_location,"afanasy")):
-                    print("ERROR: Cannot render with afanasy, afanasy not found at cgru directory '%s'." % self.cgru_location, file=sys.stderr)
+                    ui.error("Cannot render with afanasy, afanasy not found at cgru directory '%s'." % self.cgru_location, stderr=True)
                     self.trackFileEnd()
                     return 1
 
@@ -416,7 +413,7 @@ class RenderChan():
         elif allocateOnly:
 
             if os.path.exists(taskfile.getRenderPath()):
-                print("File is already allocated.")
+                ui.notice("File is already allocated.")
                 sys.exit(0)
             taskfile.dependencies=[]
             taskfile.endFrame = taskfile.startFrame + 2
@@ -515,7 +512,7 @@ class RenderChan():
             isDirty = True
             compareTime = None
             if os.environ.get('DEBUG'):
-                print("DEBUG: Dirty = 1 (no rendering exists)")
+                ui.debug("DEBUG: Dirty = 1 (no rendering exists)")
         else:
             # Otherwise we have to check against the time of the last rendering
             compareTime = float_trunc(os.path.getmtime(taskfile.getProfileRenderPath()),1)
@@ -745,7 +742,7 @@ class RenderChan():
                     dependency = self.loadedFiles[path]
                     if dependency.pending:
                         # Avoid circular dependencies
-                        print("Warning: Circular dependency detected for %s. Skipping." % (path))
+                        ui.warn("Circular dependency detected for %s. Skipping." % (path))
                         continue
                 else:
                     dependency = RenderChanFile(path, self.modules, self.projects)
@@ -755,15 +752,15 @@ class RenderChan():
                             ext = os.path.splitext(path)[1]
                             placeholder = os.path.join(self.datadir, "missing", "empty" + ext)
                             if os.path.exists(placeholder):
-                                print("   Creating an empty placeholder for %s..." % path)
+                                ui.info("   Creating an empty placeholder for %s..." % path)
                                 mkdirs(os.path.dirname(path))
                                 shutil.copy(placeholder, path)
                                 t = time.mktime(time.strptime('01.01.1981 00:00:00', '%d.%m.%Y %H:%M:%S'))
                                 os.utime(path,(t,t))
                             else:
-                                print("   Skipping file %s..." % path)
+                                ui.info("   Skipping file %s..." % path)
                         else:
-                            print("   Skipping file %s..." % path)
+                            ui.info("   Skipping file %s..." % path)
                         continue
                     self.loadedFiles[dependency.getPath()]=dependency
                     if dependency.project!=None and dependency.module!=None:
@@ -801,17 +798,17 @@ class RenderChan():
                         if compareTime is None:
                             isDirty = True
                             if os.environ.get('DEBUG'):
-                                print("DEBUG: %s:" % taskfile.getPath())
-                                print("DEBUG: Dirty = 1 (no compare time)")
-                                print()
+                                ui.debug("DEBUG: %s:" % taskfile.getPath())
+                                ui.debug("DEBUG: Dirty = 1 (no compare time)")
+                                ui.debug()
                         elif timestamp > compareTime:
                             isDirty = True
                             if os.environ.get('DEBUG'):
-                                print("DEBUG: %s:" % taskfile.getPath())
-                                print("DEBUG: Dirty = 1 (dependency timestamp is higher)")
-                                print("DEBUG:            compareTime     = %f" % (compareTime))
-                                print("DEBUG:            dependency time = %f" % (timestamp))
-                                print()
+                                ui.debug("DEBUG: %s:" % taskfile.getPath())
+                                ui.debug("DEBUG: Dirty = 1 (dependency timestamp is higher)")
+                                ui.debug("DEBUG:            compareTime     = %f" % (compareTime))
+                                ui.debug("DEBUG:            dependency time = %f" % (timestamp))
+                                ui.debug()
                         if timestamp>maxTime:
                             maxTime=timestamp
 
@@ -828,18 +825,18 @@ class RenderChan():
                 timestamp = float_trunc(taskfile.getTime(), 1)
                 if compareTime is None:
                     if os.environ.get('DEBUG'):
-                        print("DEBUG: %s:" % taskfile.getPath())
-                        print("DEBUG: Dirty = 1 (no compare time)")
-                        print()
+                        ui.debug("DEBUG: %s:" % taskfile.getPath())
+                        ui.debug("DEBUG: Dirty = 1 (no compare time)")
+                        ui.debug()
                     isDirty = True
                 elif timestamp > compareTime:
                     isDirty = True
                     if os.environ.get('DEBUG'):
-                        print("DEBUG: %s:" % taskfile.getPath())
-                        print("DEBUG: Dirty = 1 (source timestamp is higher)")
-                        print("DEBUG:            compareTime     = %f" % (compareTime))
-                        print("DEBUG:            source time = %f" % (timestamp))
-                        print()
+                        ui.debug("DEBUG: %s:" % taskfile.getPath())
+                        ui.debug("DEBUG: Dirty = 1 (source timestamp is higher)")
+                        ui.debug("DEBUG:            compareTime     = %f" % (compareTime))
+                        ui.debug("DEBUG:            source time = %f" % (timestamp))
+                        ui.debug()
                 if timestamp>maxTime:
                     maxTime=timestamp
 
@@ -883,7 +880,7 @@ class RenderChan():
         return (isDirty, list(tasklist), maxTime)
 
     def updateCompletion(self, value):
-        print("Rendering: %s" % (value*100))
+        ui.info("Rendering: %s" % (value*100))
 
     def __not_used__syncProfileData(self, renderpath):
 
@@ -891,12 +888,12 @@ class RenderChan():
             taskfile = self.loadedFiles[renderpath]
             if taskfile.pending:
                 # Avoid circular dependencies
-                print("Warning: Circular dependency detected for %s. Skipping." % (renderpath))
+                ui.warn("Circular dependency detected for %s. Skipping." % (renderpath))
                 return
         else:
             taskfile = RenderChanFile(renderpath, self.modules, self.projects)
             if not os.path.exists(taskfile.getPath()):
-                print("   No source file for %s. Skipping." % renderpath)
+                ui.info("   No source file for %s. Skipping." % renderpath)
                 return
             self.loadedFiles[taskfile.getPath()]=taskfile
             taskfile.pending=True  # we need this to avoid circular dependencies
@@ -982,7 +979,7 @@ class RenderChan():
             except:
                 for lock in locks:
                     lock.unlock()
-                print("Unexpected error:", sys.exc_info()[0])
+                ui.error("Unexpected error: %s" % (sys.exc_info()[0],))
                 raise
 
             # Releasing PROJECT LOCK
@@ -990,7 +987,7 @@ class RenderChan():
                 lock.unlock()
 
         else:
-            print("  This chunk is already up to date. Skipping.")
+            ui.info("  This chunk is already up to date. Skipping.")
 
         updateCompletion(1.0)
 
@@ -1031,7 +1028,7 @@ class RenderChan():
 
                 # We need to merge the rendered files into single one
 
-                print("Merging: %s" % profile_output)
+                ui.notice("Merging: %s" % profile_output)
 
                 # But first let's check if we really need to do that
                 uptodate = False
@@ -1062,7 +1059,7 @@ class RenderChan():
                                     segments.append(line)
                                     
                                     if not os.path.exists(line+".done") or not os.path.exists(line):
-                                        print("ERROR: Not all segments were rendered. Aborting.", file=sys.stderr)
+                                        ui.error("Not all segments were rendered. Aborting.", stderr=True)
                                         sys.exit(1)
                             
                             if os.path.isfile(profile_output+".done"):
@@ -1132,7 +1129,7 @@ class RenderChan():
                                 else:
                                     # Merge all sequences into single directory
                                     for line in segments:
-                                        print(line)
+                                        ui.info(line)
                                         copytree(line, profile_output, hardlinks=True)
 
                             os.remove(profile_output_list)
@@ -1145,7 +1142,7 @@ class RenderChan():
                                     os.remove(line+".done")
                             touch(profile_output + ".done", float(compare_time))
                         else:
-                            print("  This chunk is already merged. Skipping.")
+                            ui.info("  This chunk is already merged. Skipping.")
                         #updateCompletion(0.5)
 
                     else:
@@ -1184,7 +1181,7 @@ class RenderChan():
                                 os.rename(segment, profile_output)
                             touch(profile_output + ".done", float(compare_time))
                         else:
-                                print("ERROR: Not all segments were rendered. Aborting.", file=sys.stderr)
+                                ui.error("Not all segments were rendered. Aborting.", stderr=True)
                                 sys.exit(1)
 
                 # Add LST file
@@ -1214,7 +1211,7 @@ class RenderChan():
                 touch(output, float(compare_time))
 
         except Exception as e:
-            print("ERROR: Merge operation failed: %s" % e, file=sys.stderr)
+            ui.error("Merge operation failed: %s" % e, stderr=True)
             for lock in locks:
                 lock.unlock()
             sys.exit(1)
@@ -1244,7 +1241,7 @@ class RenderChan():
         else:
             output %= mode[0:1]
 
-        print("Merging: %s" % output)
+        ui.notice("Merging: %s" % output)
 
         # But first let's check if we really need to do that
         uptodate = False
@@ -1283,7 +1280,7 @@ class RenderChan():
                          output])
             touch(output + ".done", os.path.getmtime(output))
         else:
-            print("  This chunk is already merged. Skipping.")
+            ui.info("  This chunk is already merged. Skipping.")
 
 
     def job_snapshot(self, renderpath, snapshot_dir):
@@ -1295,9 +1292,9 @@ class RenderChan():
         filename = os.path.splitext(os.path.basename(renderpath))[0] + "-" + time_string + os.path.splitext(renderpath)[1]
         snapshot_path = os.path.join(snapshot_dir, filename)
 
-        print()
-        print("Creating snapshot to %s ..." % (filename))
-        print()
+        ui.blank()
+        ui.notice("Creating snapshot to %s ..." % (filename))
+        ui.blank()
 
         if os.path.isdir(snapshot_path):
             try:

@@ -9,6 +9,7 @@ import sys
 import stat
 
 from renderchan.core import RenderChan, __version__
+from renderchan import ui
 
 
 def _is_hidden(path, name):
@@ -19,7 +20,7 @@ def _is_hidden(path, name):
         try:
             attrs = os.stat(path, follow_symlinks=False).st_file_attributes
         except OSError as e:
-            print("WARNING: Cannot stat %s: %s" % (path, e), file=sys.stderr)
+            ui.warn("Cannot stat %s: %s" % (path, e))
             return False
         return bool(attrs & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_SYSTEM))
     return False
@@ -160,20 +161,20 @@ def main(datadir, argv):
             if args.renderfarm_engine in ("puli"):
                 renderchan.setHost(args.host)
             else:
-                print("WARNING: The --host parameter cannot be set for this type of renderfarm.")
+                ui.warn("The --host parameter cannot be set for this type of renderfarm.")
         if args.port:
             if renderchan.renderfarm_engine in ("puli"):
                 renderchan.setPort(args.port)
             else:
-                print("WARNING: The --port parameter cannot be set for this type of renderfarm.")
+                ui.warn("The --port parameter cannot be set for this type of renderfarm.")
 
         if args.cgru_location:
             renderchan.cgru_location = args.cgru_location
     else:
         if args.host:
-            print("WARNING: No renderfarm type given. Ignoring --host parameter.")
+            ui.warn("No renderfarm type given. Ignoring --host parameter.")
         if args.port:
-            print("WARNING: No renderfarm type given. Ignoring --port parameter.")
+            ui.warn("No renderfarm type given. Ignoring --port parameter.")
 
     if args.snapshot_to:
         renderchan.snapshot_path = args.snapshot_to
@@ -199,7 +200,7 @@ def main(datadir, argv):
         
     if args.recursive:
         if not os.path.isdir(filename):
-            print("ERROR: --recursive expects a directory, got a file: %s" % filename, file=sys.stderr)
+            ui.error("--recursive expects a directory, got a file: %s" % filename, stderr=True)
             return 1
 
         success = True
@@ -213,7 +214,7 @@ def main(datadir, argv):
             try:
                 entries = sorted(os.listdir(d))
             except OSError as e:
-                print("WARNING: Cannot list directory %s: %s" % (d, e), file=sys.stderr)
+                ui.warn("Cannot list directory %s: %s" % (d, e))
                 continue
             for f in entries:
                 file = os.path.join(d, f)
@@ -224,7 +225,7 @@ def main(datadir, argv):
                     rel_parts = os.path.relpath(file, filename).split(os.sep)
                 except ValueError as e:
                     # Happens on Windows when crossing drive letters; skip to avoid crashing
-                    print("WARNING: Cannot build relative path for %s: %s" % (file, e), file=sys.stderr)
+                    ui.warn("Cannot build relative path for %s: %s" % (file, e))
                     continue
                 # Skip anything under render/ directory
                 if 'render' in (part.lower() for part in rel_parts):
@@ -238,12 +239,12 @@ def main(datadir, argv):
                     
         for file in files:
             try:
-                print(_("Process file: %s") % (file))
+                ui.info(_("Process file: %s") % (file))
                 renderchan.submit(file, args.dependenciesOnly, args.allocateOnly, args.stereo)
             except:
                 while renderchan.trackedFilesStack:
                     renderchan.trackFileEnd()
-                print(_("Rendering failed for file: %s") % (file))
+                ui.error(_("Rendering failed for file: %s") % (file))
                 success = False
         return 0 if success else 1
 
