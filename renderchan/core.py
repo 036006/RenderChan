@@ -170,6 +170,7 @@ class RenderChan():
 
         elif self.action =="pack":
 
+            ui.progress_context(os.path.basename(filename))
             self.addToGraph(taskfile, dependenciesOnly, allocateOnly)
 
             list = []
@@ -192,6 +193,7 @@ class RenderChan():
 
             with zipfile.ZipFile(zipname, 'x') as myzip:
                 for i,c in enumerate(list):
+                    ui.progress("Packing", i, len(list))
                     ui.info("Zipping file: "+c)
                     myzip.write(c, c[len(commonpath)+1:])
 
@@ -204,6 +206,8 @@ class RenderChan():
                 self.projects.list[path].cache.close()
 
         elif self.action =="render":
+
+            ui.progress_start()
 
             if self.renderfarm_engine=="afanasy":
                 if not os.path.exists(os.path.join(self.cgru_location,"afanasy")):
@@ -565,14 +569,17 @@ class RenderChan():
                 # Check if module can render mov directly (like Nuke) or needs png+ffmpeg workaround
                 module_supports_direct_mov = "mov" in taskfile.module.getOutputFormats()
 
+                chunk_format = taskfile.getFormat()
+                if chunk_format=="mov" and not module_supports_direct_mov:
+                    chunk_format = "png"
+                ui.progress_context("%s to .%s (%s)" % (os.path.basename(taskfile.getPath()), chunk_format, taskfile.module.getName()))
+
                 for range in segments:
                     start=range[0]
                     end=range[1]
-                    format=taskfile.getFormat()
-                    if format=="mov" and not module_supports_direct_mov:
-                        format="png"
-                    self.job_render(taskfile, format, self.updateCompletion, start, end, compare_time)
+                    self.job_render(taskfile, chunk_format, self.updateCompletion, start, end, compare_time)
 
+                ui.progress_context("%s to .%s" % (os.path.basename(taskfile.getPath()), taskfile.getFormat()))
                 self.job_merge(taskfile, taskfile.getFormat(), taskfile.project.getConfig("stereo"), compare_time)
 
             elif self.renderfarm_engine=="afanasy":
@@ -874,7 +881,9 @@ class RenderChan():
         return (isDirty, list(tasklist), maxTime)
 
     def updateCompletion(self, value):
+        # verbose: legacy "Rendering: %" line; quiet: shimmer bar (each is a no-op in the other mode)
         ui.info("Rendering: %s" % (value*100))
+        ui.progress("Rendering", value*100, 100)
 
     def __not_used__syncProfileData(self, renderpath):
 
@@ -1022,6 +1031,7 @@ class RenderChan():
 
                 # We need to merge the rendered files into single one
 
+                ui.progress("Merging")
                 ui.notice("Merging: %s" % profile_output)
 
                 # But first let's check if we really need to do that
@@ -1218,6 +1228,8 @@ class RenderChan():
 
     def job_merge_stereo(self, taskfile, mode, format="mp4"):
 
+        ui.progress_context("%s to .%s (stereo)" % (os.path.basename(taskfile.getPath()), format))
+
         output = os.path.splitext(taskfile.getRenderPath())[0]+"-stereo-%s."+format
 
         prev_mode = self.projects.stereo
@@ -1235,6 +1247,7 @@ class RenderChan():
         else:
             output %= mode[0:1]
 
+        ui.progress("Merging")
         ui.notice("Merging: %s" % output)
 
         # But first let's check if we really need to do that

@@ -40,11 +40,16 @@ class RenderChanModuleManager():
     def loadAll(self):
         dir = os.path.dirname(os.path.abspath(__file__))
         modulesdir = os.path.join(dir, "contrib")
-        files = [ f for f in os.listdir(modulesdir) if os.path.isfile(os.path.join(modulesdir,f)) ]
-        for f in files:
+        names = []
+        for f in os.listdir(modulesdir):
             filename, ext = os.path.splitext(f)
-            if ext==".py" and filename!='__init__':
-                self.load(filename)
+            if ext==".py" and filename!='__init__' and os.path.isfile(os.path.join(modulesdir,f)):
+                names.append(filename)
+        ui.progress_start()
+        for i, name in enumerate(names):
+            self.load(name)
+            ui.progress("Loading modules", i+1, len(names))
+        ui.progress_stop()
 
     def get(self, name):
         if name not in self.list:
