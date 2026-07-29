@@ -232,6 +232,7 @@ class RenderChan():
                 self.graph = Graph( 'RenderChan graph', poolName="default" )
 
             last_task = None
+            is_dirty = None
 
             if not ui.is_verbose() and self.renderfarm_engine == "" and not (dependenciesOnly or allocateOnly) \
                     and stereo not in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
@@ -301,7 +302,7 @@ class RenderChan():
                     self.setStereoMode("left")
                 elif stereo in ("right","r"):
                     self.setStereoMode("right")
-                self.addToGraph(taskfile, dependenciesOnly, allocateOnly)
+                is_dirty = self.addToGraph(taskfile, dependenciesOnly, allocateOnly)
 
                 last_task = taskfile.taskPost
 
@@ -388,6 +389,10 @@ class RenderChan():
                 # TODO: Render our Graph
                 pass
 
+            if is_dirty is False and self.renderfarm_engine == "" and not self.force:
+                ui.log_success("%s is up to date" % os.path.basename(filename))
+                ui.info("File is up to date: %s" % filename)
+
         self.trackFileEnd()
 
 
@@ -400,6 +405,8 @@ class RenderChan():
         for path in self.loadedFiles.keys():
             self.loadedFiles[path].isDirty=None
         #self.loadedFiles={}
+
+        result = None
 
         # == taskgroups bug / commented ==
         # Prepare taskgroups if we do stereo rendering
@@ -432,10 +439,11 @@ class RenderChan():
 
         else:
 
-            self.parseRenderDependency(taskfile, allocateOnly, self.dry_run, self.force)
+            result = self.parseRenderDependency(taskfile, allocateOnly, self.dry_run, self.force)
 
 
         self.childTask = None
+        return result
 
 
     def trackFileBegin(self, taskfile):
