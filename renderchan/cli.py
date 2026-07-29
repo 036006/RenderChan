@@ -7,6 +7,7 @@ from argparse import SUPPRESS
 import os
 import sys
 import stat
+import time
 
 from renderchan.core import RenderChan, __version__
 from renderchan import ui
@@ -122,6 +123,10 @@ def process_args(datadir):
             action="store_true",
             default=False,
             help=_("Parse files, but don't render anything."))
+    parser.add_argument("--verbose", dest="verbose",
+            action="store_true",
+            default=False,
+            help=_("Verbose output (the historical plain-text format)."))
     parser.add_argument("--recursive", dest="recursive",
             action="store_true",
             default=False,
@@ -143,6 +148,8 @@ def process_args(datadir):
 
 def main(datadir, argv):
     args = process_args(datadir)
+
+    ui.set_verbose(args.verbose)
 
     filename = os.path.abspath(args.file)
 
@@ -240,12 +247,20 @@ def main(datadir, argv):
         for file in files:
             try:
                 ui.info(_("Process file: %s") % (file))
+                ui.log_info(file)
                 renderchan.submit(file, args.dependenciesOnly, args.allocateOnly, args.stereo)
             except:
                 while renderchan.trackedFilesStack:
                     renderchan.trackFileEnd()
                 ui.error(_("Rendering failed for file: %s") % (file))
                 success = False
-        return 0 if success else 1
+        result = 0 if success else 1
+    else:
+        result = renderchan.submit(filename, args.dependenciesOnly, args.allocateOnly, args.stereo)
 
-    return renderchan.submit(filename, args.dependenciesOnly, args.allocateOnly, args.stereo)
+    ui.progress_stop()
+    if result in (0, None):
+        ui.outro(_("Done in %s") % ui.format_duration(time.time() - renderchan.start_time))
+    else:
+        ui.outro(_("Failed"))
+    return result

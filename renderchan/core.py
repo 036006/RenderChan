@@ -82,15 +82,9 @@ class RenderChan():
 
     def __del__(self):
         if self.renderfarm_engine == "":
-            t = time.time()-self.start_time
-            hours = int(t/3600)
-            t = t - hours*3600
-            minutes = int(t/60)
-            t = t - minutes*60
-            seconds = int(t)
             ui.blank()
             ui.blank()
-            ui.info("Execution time: %02d:%02d:%02d " % ( hours, minutes, seconds ))
+            ui.info("Execution time: %s " % ui.format_duration(time.time()-self.start_time))
             ui.blank()
 
     def setHost(self, host):

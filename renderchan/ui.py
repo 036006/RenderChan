@@ -129,6 +129,12 @@ def is_verbose() -> bool:
     return _VERBOSE
 
 
+def format_duration(seconds: float) -> str:
+    """Format seconds as HH:MM:SS."""
+    t = int(seconds)
+    return "%02d:%02d:%02d" % (t // 3600, (t % 3600) // 60, t % 60)
+
+
 def _write(message: str) -> None:
     if _progress is not None:
         _progress.interrupt()
