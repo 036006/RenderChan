@@ -2,6 +2,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import is_true_string
+from renderchan import ui
 import subprocess
 import gzip
 import os, sys
@@ -170,8 +171,9 @@ class RenderChanSynfigModule(RenderChanModule):
                 if rc is not None:
                     break
             #print(line, end=' ')
-            sys.stdout.buffer.write(line.encode(locale.getpreferredencoding(), errors='replace'))
-            sys.stdout.flush()
+            if ui.is_verbose():
+                sys.stdout.buffer.write(line.encode(locale.getpreferredencoding(), errors='replace'))
+                sys.stdout.flush()
             fn = frameNumberPattern.search(line)
             if fn:
                 currentFrame = float(fn.group(1).strip())
@@ -179,13 +181,13 @@ class RenderChanSynfigModule(RenderChanModule):
                 updateCompletion(comp + fc)
             rc = out.poll()
 
-        print('====================================================')
-        print('  Synfig command returns with code %d' % rc)
-        print('====================================================')
+        ui.info('====================================================')
+        ui.info('  Synfig command returns with code %d' % rc)
+        ui.info('====================================================')
         if rc != 0:
             if os.name == 'nt' and rc == -1073741819:
                 pass
             else:
-                print('  Synfig command failed...')
+                ui.error('Synfig command failed...')
                 raise Exception('  Synfig command failed...')
         updateCompletion(1)
