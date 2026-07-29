@@ -14,6 +14,8 @@ from renderchan.utils import which
 from renderchan.utils import is_true_string
 from renderchan import ui
 import os, time
+import re
+import tempfile
 import shutil
 import subprocess
 import zipfile
@@ -922,6 +924,28 @@ class RenderChan():
 
         taskfile.pending=False
 
+    def run_ffmpeg_progress(self, cmd, total_frames, phase="Encoding"):
+        if ui.is_verbose():
+            subprocess.check_call(cmd)
+            return
+        cmd = cmd[:1] + ["-nostats", "-progress", "pipe:1"] + cmd[1:]
+        errlog = tempfile.TemporaryFile()
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errlog)
+        frame_re = re.compile(r"frame=\s*(\d+)")
+        for line in proc.stdout:
+            m = frame_re.match(line.decode("utf-8", errors="replace").strip())
+            if m and total_frames > 0:
+                ui.progress(phase, min(int(m.group(1)), total_frames), total_frames)
+        rc = proc.wait()
+        if rc != 0:
+            errlog.seek(0)
+            tail = errlog.read().decode("utf-8", errors="replace").splitlines()
+            errlog.close()
+            for line in tail[-10:]:
+                ui.error(line)
+            raise subprocess.CalledProcessError(rc, cmd)
+        errlog.close()
+
     def job_render(self, taskfile, format, updateCompletion, start=None, end=None, compare_time=None):
         """
 
@@ -1010,6 +1034,7 @@ class RenderChan():
         try:
 
             params = taskfile.getParams(self.force_proxy)
+            total_frames = taskfile.getEndFrame()-taskfile.getStartFrame()+1
 
             suffix_list = [""]
             if "extract_alpha" in params and is_true_string(params["extract_alpha"]):
@@ -1031,8 +1056,8 @@ class RenderChan():
 
                 # We need to merge the rendered files into single one
 
-                ui.progress("Merging")
-                ui.notice("Merging: %s" % profile_output)
+                if ui.is_verbose():
+                    ui.notice("Merging: %s" % profile_output)
 
                 # But first let's check if we really need to do that
                 uptodate = False
@@ -1050,6 +1075,12 @@ class RenderChan():
                             os.remove(profile_output + ".done")
 
                 if not uptodate:
+
+                    ui.intro("Merging %s to .%s" % (os.path.basename(taskfile.getPath()), format))
+                    # For the mov-via-png workaround the block title already shows the final
+                    # format, and profile_output is the intermediate png path - skip the line
+                    if not ui.is_verbose() and not (format=="mov" and not module_supports_direct_mov):
+                        ui.notice("Merging: %s" % os.path.relpath(profile_output, taskfile.project.getProfilePath()))
 
                     if taskfile.getPacketSize() > 0:
                         if os.path.exists(profile_output_list):
@@ -1073,11 +1104,16 @@ class RenderChan():
                                 if len(segments)==1:
                                     os.rename(segments[0], profile_output)
                                 else:
+                                    ui.progress("Concatenating")
                                     subprocess.check_call(
-                                        [self.ffmpeg_binary, "-y", "-safe", "0", "-f", "concat", "-i", profile_output_list, "-c", "copy", profile_output])
+                                        [self.ffmpeg_binary, "-y", "-safe", "0", "-f", "concat", "-i", profile_output_list, "-c", "copy", profile_output],
+                                        **ui.quiet_subprocess())
                             elif format=="mov":
                                 num=0
                                 errors = []
+                                total_png = 0
+                                for line in segments:
+                                    total_png += len([f for f in os.listdir(line) if f.lower().endswith('.png')])
                                 for line in segments:
                                     src_dir=line
                                     dst_dir=profile_output
@@ -1099,6 +1135,7 @@ class RenderChan():
                                         except shutil.Error as err:
                                             errors.extend(err.args[0])
                                         num=num+1
+                                        ui.progress("Linking frames", num, total_png)
                                 if errors:
                                     raise shutil.Error(errors)
 
@@ -1124,7 +1161,7 @@ class RenderChan():
                                 ffmpeg_cmd.append("yuv422p10le")
                                 profile_output_mov = os.path.splitext( taskfile.getProfileRenderPath() )[0] + suffix + "." + format
                                 ffmpeg_cmd.append(profile_output_mov)
-                                subprocess.check_call(ffmpeg_cmd)
+                                self.run_ffmpeg_progress(ffmpeg_cmd, total_frames)
                                 shutil.rmtree(profile_output, ignore_errors=True)
                                 profile_output=profile_output_mov
                             else:
@@ -1132,9 +1169,10 @@ class RenderChan():
                                     os.rename(segments[0], profile_output)
                                 else:
                                     # Merge all sequences into single directory
-                                    for line in segments:
+                                    for i, line in enumerate(segments):
                                         ui.info(line)
                                         copytree(line, profile_output, hardlinks=True)
+                                        ui.progress("Copying segments", i+1, len(segments))
 
                             os.remove(profile_output_list)
                             for line in segments:
@@ -1179,7 +1217,7 @@ class RenderChan():
                                 ffmpeg_cmd.append("yuv422p10le")
                                 profile_output_mov = os.path.splitext( taskfile.getProfileRenderPath() )[0] + suffix + "." + format
                                 ffmpeg_cmd.append(profile_output_mov)
-                                subprocess.check_call(ffmpeg_cmd)
+                                self.run_ffmpeg_progress(ffmpeg_cmd, total_frames)
                                 profile_output=profile_output_mov
                             else:
                                 os.rename(segment, profile_output)
@@ -1187,6 +1225,8 @@ class RenderChan():
                         else:
                                 ui.error("Not all segments were rendered. Aborting.", stderr=True)
                                 sys.exit(1)
+
+                    ui.outro("done")
 
                 # Add LST file
                 if format in RenderChanModule.imageExtensions and os.path.isdir(profile_output):
@@ -1228,6 +1268,7 @@ class RenderChan():
 
     def job_merge_stereo(self, taskfile, mode, format="mp4"):
 
+        total_frames = taskfile.getEndFrame()-taskfile.getStartFrame()+1
         ui.progress_context("%s to .%s (stereo)" % (os.path.basename(taskfile.getPath()), format))
 
         output = os.path.splitext(taskfile.getRenderPath())[0]+"-stereo-%s."+format
@@ -1247,8 +1288,8 @@ class RenderChan():
         else:
             output %= mode[0:1]
 
-        ui.progress("Merging")
-        ui.notice("Merging: %s" % output)
+        if ui.is_verbose():
+            ui.notice("Merging: %s" % output)
 
         # But first let's check if we really need to do that
         uptodate = False
@@ -1269,23 +1310,27 @@ class RenderChan():
                     os.remove(output + ".done")
         
         if not uptodate:
+            ui.intro("Merging %s to .%s (stereo)" % (os.path.basename(taskfile.getPath()), format))
+            if not ui.is_verbose():
+                ui.notice("Merging: %s" % os.path.relpath(output, taskfile.project.path))
             if mode[0:1]=='v':
-                subprocess.check_call(
+                self.run_ffmpeg_progress(
                         ["ffmpeg", "-y", "-i", input_left, "-i", input_right,
                          "-filter_complex", "[0:v]setpts=PTS-STARTPTS, pad=iw:ih*2[bg]; [1:v]setpts=PTS-STARTPTS[fg]; [bg][fg]overlay=0:h",
                          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "1",
                          "-c:a", "aac", "-qscale:a", "0",
                          "-f", "mp4",
-                         output])
+                         output], total_frames)
             else:
-                subprocess.check_call(
+                self.run_ffmpeg_progress(
                         ["ffmpeg", "-y", "-i", input_left, "-i", input_right,
                          "-filter_complex", "[0:v]setpts=PTS-STARTPTS, pad=iw*2:ih[bg]; [1:v]setpts=PTS-STARTPTS[fg]; [bg][fg]overlay=w",
                          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "1",
                          "-c:a", "aac", "-qscale:a", "0",
                          "-f", "mp4",
-                         output])
+                         output], total_frames)
             touch(output + ".done", os.path.getmtime(output))
+            ui.outro("done")
         else:
             ui.info("  This chunk is already merged. Skipping.")
 
