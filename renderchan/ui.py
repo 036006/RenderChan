@@ -118,6 +118,7 @@ def _amber(t: float, dark=AMBER_DARK, bright=AMBER_BRIGHT) -> str:
 # ------------------------------------------------------------- verbosity ----
 
 _VERBOSE = False
+_MUTED = False
 
 
 def set_verbose(flag: bool) -> None:
@@ -127,6 +128,12 @@ def set_verbose(flag: bool) -> None:
 
 def is_verbose() -> bool:
     return _VERBOSE
+
+
+def set_muted(flag: bool) -> None:
+    """Mute warnings (e.g. during a read-only analysis pre-pass)."""
+    global _MUTED
+    _MUTED = bool(flag)
 
 
 def format_duration(seconds: float) -> str:
@@ -146,11 +153,21 @@ def _rail() -> str:
     return f"{DM}{G['rail']}{RST}  " if _indent == 0 else ""
 
 
+def _safe_write(text: str) -> None:
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # consumer closed the pipe (e.g. `renderchan | head`) - go quietly
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        sys.exit(1)
+
+
 def _write(message: str) -> None:
     if _progress is not None:
         _progress.interrupt()
-    sys.stdout.write(_prefix() + message + "\n")
-    sys.stdout.flush()
+    _safe_write(_prefix() + message + "\n")
 
 
 # --------------------------------------------------- clack-like scaffold ----
@@ -192,6 +209,13 @@ def log_warn(message: str) -> None:
     if _VERBOSE:
         return
     _write(f"{_rail()}{YLW}{G['warn']}{RST} {message}")
+
+
+def log_line(message: str) -> None:
+    """Plain line at the current indent (list items inside blocks)."""
+    if _VERBOSE:
+        return
+    _write("  " + str(message))
 
 
 def rail_blank() -> None:
@@ -236,6 +260,8 @@ def notice(message="") -> None:
 
 
 def warn(message) -> None:
+    if _MUTED:
+        return
     if _VERBOSE:
         _write("Warning: %s" % message)
     else:
@@ -328,28 +354,24 @@ class ShimmerProgress:
             self._thread.join(timeout=2)
         with self._lock:
             self._print_phase_done_locked()
-            sys.stdout.flush()
 
     def close_phase(self) -> None:
         """Print the done-line of the currently open phase, if any."""
         with self._lock:
             self._print_phase_done_locked()
-            sys.stdout.flush()
 
     def interrupt(self) -> None:
         """Erase the animation line so a permanent line can be printed cleanly."""
         with self._lock:
             if self._tty and self._msg:
-                sys.stdout.write("\r\x1b[K")
-                sys.stdout.flush()
+                _safe_write("\r\x1b[K")
 
     # ------------------------------------------------------ internals ----
 
     def _print_phase_start_locked(self, phase_name: str) -> None:
         prefix = "\r\x1b[K" if self._tty else ""
         title = f"{phase_name} {self._context}" if self._context and _indent == 0 else phase_name
-        sys.stdout.write(f"{prefix}{_prefix()}{DM}{G['corner_tl']}{RST}  {title}\n")
-        sys.stdout.flush()
+        _safe_write(f"{prefix}{_prefix()}{DM}{G['corner_tl']}{RST}  {title}\n")
 
     def _print_phase_done_locked(self) -> None:
         if not self._phase_name:
@@ -359,8 +381,7 @@ class ShimmerProgress:
             detail = "  %s found" % f"{self._count:,}".replace(",", " ")
         else:
             detail = "  done"
-        sys.stdout.write(f"{prefix}{_prefix()}{DM}{G['corner_bl']}{RST}{detail}\n")
-        sys.stdout.flush()
+        _safe_write(f"{prefix}{_prefix()}{DM}{G['corner_bl']}{RST}{detail}\n")
         self._phase_name, self._percent, self._count = "", -1, 0
 
     def _render_loop(self) -> None:
@@ -391,8 +412,7 @@ class ShimmerProgress:
         else:
             line = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} {self._msg}..."
 
-        sys.stdout.write(f"\r\x1b[K{line}")
-        sys.stdout.flush()
+        _safe_write(f"\r\x1b[K{line}")
 
     def _render_bar(self, frame: int, filled: int, empty: int) -> str:
         if filled == 0:
