@@ -233,6 +233,17 @@ class RenderChan():
 
             last_task = None
 
+            if not ui.is_verbose() and self.renderfarm_engine == "" and not (dependenciesOnly or allocateOnly) \
+                    and stereo not in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
+                # Quiet mode: cheap dry-run pass to show the "Resolving dependencies" block
+                # before any rendering starts. Analysis is cached, so this costs almost nothing.
+                self._counting_deps = True
+                self._counted_deps = set()
+                self.parseDirectDependency(taskfile, None, True, self.force)
+                self._counting_deps = False
+                ui.progress_stop()
+                ui.progress_start()  # restart for the rendering phases
+
             if stereo in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
 
                 # Left eye graph
@@ -739,8 +750,20 @@ class RenderChan():
 
             deps = taskfile.getDependencies()
 
+            if getattr(self, '_counting_deps', False):
+                # Only dependencies found by parsing the file itself (module.analyze),
+                # not the *.conf files appended by getDependencies()
+                parsed_deps = set(os.path.abspath(p) for p in taskfile.dependencies)
+            else:
+                parsed_deps = None
+
             for path in deps:
                 path = os.path.abspath(path)
+                new_dep = False
+                if parsed_deps is not None and path in parsed_deps and path not in self._counted_deps:
+                    self._counted_deps.add(path)
+                    ui.progress_tick("Resolving dependencies")
+                    new_dep = True
                 if path in self.loadedFiles.keys():
                     dependency = self.loadedFiles[path]
                     if dependency.pending:
@@ -764,6 +787,9 @@ class RenderChan():
                                 ui.info("   Skipping file %s..." % path)
                         else:
                             ui.info("   Skipping file %s..." % path)
+                        if not os.path.exists(dependency.getPath()) and getattr(self, '_counting_deps', False) and new_dep:
+                            ui.log_warn("Missing: %s" % (
+                                os.path.relpath(path, taskfile.project.path) if taskfile.project else path))
                         continue
                     self.loadedFiles[dependency.getPath()]=dependency
                     if dependency.project!=None and dependency.module!=None:
