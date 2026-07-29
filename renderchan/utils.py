@@ -6,6 +6,7 @@ import time
 import threading
 import io
 import shutil
+from renderchan import ui
 
 if os.name == 'nt':
     import ctypes
@@ -112,7 +113,7 @@ def sync(profile_output, output, compareTime=None):
                 output_str=output
                 if len(output_str)>60:
                     output_str="..."+output_str[-60:]
-                print(". . Syncing profile data for %s" % output_str)
+                ui.info(". . Syncing profile data for %s" % output_str)
 
             if not os.path.exists(os.path.dirname(output)):
                     mkdirs(os.path.dirname(output))
@@ -128,7 +129,7 @@ def sync(profile_output, output, compareTime=None):
                         else:
                             os.remove(output)
                     except:
-                        print("Failed to remove %s... Trying again..." % output)
+                        ui.warn("Failed to remove %s... Trying again..." % output)
                         pass
                 rename_success=False
                 while not rename_success:
@@ -136,7 +137,7 @@ def sync(profile_output, output, compareTime=None):
                         os.rename(output_tmp, output)
                         rename_success=True
                     except:
-                        print("Failed to rename %s -> %s... Trying again..." % (output_tmp, output))
+                        ui.warn("Failed to rename %s -> %s... Trying again..." % (output_tmp, output))
                         pass
             else:
                 if os.path.exists(output):
@@ -157,7 +158,7 @@ def sync(profile_output, output, compareTime=None):
                     try:
                         os.link(profile_output, output)
                     except:
-                        print("Warning: Cannot create a symlink.")
+                        ui.warn("Cannot create a symlink.")
                         try:
                             shutil.copyfile(profile_output, output)
                         except:

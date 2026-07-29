@@ -7,6 +7,7 @@ import shutil
 import sys
 from renderchan.utils import mkdirs, sync, file_is_older_than, ini_wrapper, LockThread, copytree
 from renderchan.cache import RenderChanCache
+from renderchan import ui
 
 class RenderChanProjectManager():
     def __init__(self):
@@ -137,7 +138,7 @@ class RenderChanProject():
             if self.language == current_language:
                 needCleanup=False
         if needCleanup and os.path.exists(os.path.join(self.path,'render',localedir)):
-            print("The language data is inconsistent in %s. Cleaning..." % os.path.join(self.path,'render',localedir))
+            ui.info("The language data is inconsistent in %s. Cleaning..." % os.path.join(self.path,'render',localedir))
             shutil.rmtree(os.path.join(self.path,'render',localedir))
             if os.path.exists(os.path.join(self.path,localedir)):
                 mkdirs(os.path.join(self.path,'render',localedir))
@@ -159,7 +160,7 @@ class RenderChanProject():
         """
         if self.version==0 and profile!=None:
 
-            print("Warning: Profiles are not supported with old project format. No profile loaded.")
+            ui.warn("Profiles are not supported with old project format. No profile loaded.")
             return False
 
         elif self.version==0:
@@ -183,9 +184,7 @@ class RenderChanProject():
                         break
                     if os.path.realpath(os.path.dirname(realConfigPath)) == os.path.realpath(realConfigPath):
                         # We have reached root directory, no parent config found
-                        print(file=sys.stderr)
-                        print("ERROR: Empty project.conf found, but no non-empty parent project.conf could be located.", file=sys.stderr)
-                        print(file=sys.stderr)
+                        ui.error("Empty project.conf found, but no non-empty parent project.conf could be located.", stderr=True)
                         sys.exit(1)
                     realConfigPath = os.path.dirname(realConfigPath)
                 realConfigPath = os.path.join(realConfigPath,"project.conf")
@@ -201,7 +200,7 @@ class RenderChanProject():
             # sanity check
             for section in config.sections():
                 if "." in section:
-                    print("Warning: Incorrect profile name found (%s) - dots are not allowed." % (section))
+                    ui.warn("Incorrect profile name found (%s) - dots are not allowed." % (section))
 
             if profile==None:
                 if config.has_option("main", "active_profile"):
@@ -394,17 +393,17 @@ class RenderChanProject():
             return False
 
         if language==current_language:
-            print("This language is already active.")
+            ui.notice("This language is already active.")
             return True
 
         if not os.path.exists(localedirpath+"."+language):
             if not create:
-                print("Error: No such language (%s)." % language, file=sys.stderr)
+                ui.error("No such language (%s)." % language, stderr=True)
                 return False
             else:
-                print("Creating new language: %s..." % language)
+                ui.notice("Creating new language: %s..." % language)
                 copytree(localedirpath, localedirpath+"."+language, False, False, ignore_audio)
-                print("   Language %s copied to %s." % (current_language,language))
+                ui.notice("   Language %s copied to %s." % (current_language,language))
             os.remove(os.path.join(localedirpath+"."+language, "lang.conf"))
 
         # do directory switch
@@ -420,7 +419,7 @@ class RenderChanProject():
             mkdirs(os.path.join(self.path,'render',localedir))
             shutil.copy2(os.path.join(localedirpath,'lang.conf'),os.path.join(self.path,'render',localedir,'lang.conf'))
 
-        print("Done.")
+        ui.notice("Done.")
         return True
 
 
@@ -444,7 +443,7 @@ class RenderChanProject():
         msg=""
         while True:
             if msg!="":
-                print(msg)
+                ui.warn(msg)
             msg="The rendertree is locked by other process. Waiting..."
             # Check if we are on correct profile
             need_sync = True
@@ -535,7 +534,7 @@ class RenderChanProject():
                         continue
                 else:
                     # something is wrong, because file is vanished
-                    print("Warning: Something is wrong, since lock file is vanished. Waiting for 5 seconds...")
+                    ui.warn("Something is wrong, since lock file is vanished. Waiting for 5 seconds...")
                     time.sleep(5)
                     continue
 

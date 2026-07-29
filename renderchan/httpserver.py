@@ -10,6 +10,7 @@ import os.path
 import json
 
 from renderchan.core import RenderChan
+from renderchan import ui
 
 
 class RenderChanHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -99,6 +100,8 @@ def process_args():
 
 def main(datadir, argv):
     args = process_args()
+
+    ui.set_verbose(True)
 
     server = HTTPServer((args.host, args.port), RenderChanHTTPRequestHandler)
     server.renderchan_datadir = datadir

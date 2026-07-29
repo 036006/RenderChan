@@ -5,6 +5,7 @@ from optparse import OptionParser
 import os
 from renderchan.core import RenderChan
 from renderchan.file import RenderChanFile
+from renderchan import ui
 import sys
 
 
@@ -55,17 +56,20 @@ def process_args():
     if args:
         options.filename=os.path.abspath(args[0])
     else:
-        print("ERROR: Please provide input filename", file=sys.stderr)
+        ui.error("Please provide input filename", stderr=True)
         exit(1)
 
     return options, args
 
 def updateCompletion(value):
-    print("Rendering: %s" % (value*100))
+    ui.info("Rendering: %s" % (value*100))
+    ui.progress("Rendering", value*100, 100)
 
 
 def main(argv):
     options, args = process_args()
+
+    ui.set_verbose(True)
 
     renderchan = RenderChan()
     renderchan.projects.readonly = True
@@ -96,9 +100,9 @@ def main(argv):
         else:
             (isDirty, tasklist, maxTime)=renderchan.parseDirectDependency(taskfile, compare_time)
             if isDirty:
-                print("ERROR: There are unrendered dependencies for this file!", file=sys.stderr)
-                print("       (Project tree changed or job started too early?)", file=sys.stderr)
-                print("       Aborting.", file=sys.stderr)
+                ui.error("There are unrendered dependencies for this file!", stderr=True)
+                ui.error("       (Project tree changed or job started too early?)", stderr=True)
+                ui.error("       Aborting.", stderr=True)
                 exit(1)
 
     if options.action == 'render':
@@ -113,6 +117,6 @@ def main(argv):
             renderchan.job_merge(taskfile, taskfile.getFormat(), renderchan.projects.stereo, compare_time)
     elif options.action == 'snapshot':
         if not options.snapshot_target:
-            print("ERROR: Please specify output filename using --target-dir option.", file=sys.stderr)
+            ui.error("Please specify output filename using --target-dir option.", stderr=True)
         renderchan.job_snapshot(options.filename, os.path.abspath(options.snapshot_target))
 

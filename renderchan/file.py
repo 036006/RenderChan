@@ -5,6 +5,7 @@ import configparser
 from renderchan.module import RenderChanModule
 from renderchan.utils import float_trunc, ini_wrapper, is_true_string, sanitize_path
 from renderchan.metadata import RenderChanMetadata
+from renderchan import ui
 
 class RenderChanFile():
     def __init__(self, path, modules, projects):
@@ -16,7 +17,7 @@ class RenderChanFile():
         if self.projectPath!='':
             self.project=projects.get(self.projectPath)
         else:
-            print("Warning: File %s doesn't belong to any project." % (path))
+            ui.warn("File %s doesn't belong to any project." % (path))
 
         # Associated tasks
         self.taskPost=None
@@ -55,7 +56,7 @@ class RenderChanFile():
                     output_str=path
                 if len(output_str)>60:
                     output_str="..."+output_str[-60:]
-                print(". Analyzing file: %s" % output_str)
+                ui.info(". Analyzing file: %s" % output_str)
 
                 info=None
                 dependencies=None
@@ -63,7 +64,7 @@ class RenderChanFile():
                     info=self.project.cache.getInfo(self.localPath)
                     dependencies=self.project.cache.getDependencies(self.localPath)
                 if info!=None and dependencies!=None and info["timestamp"]>=self.getTime():
-                    print(". . Cache found")
+                    ui.info(". . Cache found")
                     self.startFrame=int(info["startFrame"])
                     self.endFrame=int(info["endFrame"])
                     for dep in dependencies:
@@ -110,7 +111,7 @@ class RenderChanFile():
                     self.setFormat(ext)
 
             else:
-                print("Warning: No source file found for %s" % path)
+                ui.warn("No source file found for %s" % path)
 
     def _loadConfig(self, filename):
 
@@ -302,13 +303,13 @@ class RenderChanFile():
                     try:
                         proxy_scale = float(params['proxy_scale'])
                     except:
-                        print("WARNING: Wrong value for 'proxy scale' (%s)." % self.getPath())
+                        ui.warn("Wrong value for 'proxy scale' (%s)." % self.getPath())
                         proxy_scale = 1.0
                     width=int(params['width'])
                     height=int(params['height'])
                     if not force_proxy and (((width*proxy_scale) % 1) != 0 or ((height*proxy_scale) % 1) != 0):
-                        print("WARNING: Can't apply 'proxy scale' for file (%s):" % self.getPath())
-                        print("         Dimensions %sx%s give non-integer values when multiplied by factor of %s." % (width, height, proxy_scale))
+                        ui.warn("Can't apply 'proxy scale' for file (%s):" % self.getPath())
+                        ui.warn("         Dimensions %sx%s give non-integer values when multiplied by factor of %s." % (width, height, proxy_scale))
                     else:
                         params['width'] = str(width*proxy_scale)
                         params['height'] = str(height*proxy_scale)
@@ -376,7 +377,7 @@ class RenderChanFile():
             self.project.setFrozen(self.localPath, value)
         else:
             if value:
-                print("ERROR: Cannot freeze file which is not a part of any project.", file=sys.stderr)
+                ui.error("Cannot freeze file which is not a part of any project.", stderr=True)
 
     def getMetadata(self):
         if self.metadata==None:

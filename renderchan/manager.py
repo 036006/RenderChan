@@ -8,6 +8,7 @@ from renderchan.core import RenderChan
 from renderchan.core import Attribution
 from renderchan.file import RenderChanFile
 from renderchan.project import RenderChanProject
+from renderchan import ui
 
 
 def process_args():
@@ -36,6 +37,8 @@ def process_args():
 
 def main(argv):
     options, args = process_args()
+
+    ui.set_verbose(True)
 
     # Parse frozen parameters
     # The --freeze and --unfreeze options are temporary disabled, because this function should behave differently.
