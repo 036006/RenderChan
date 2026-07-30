@@ -408,6 +408,8 @@ class RenderChan():
             if is_dirty is False and self.renderfarm_engine == "" and not self.force:
                 ui.log_success("%s is up to date" % os.path.basename(filename))
                 ui.info("File is up to date: %s" % filename)
+                ui.blank()
+                ui.rail_blank()
 
         self.trackFileEnd()
 

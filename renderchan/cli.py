@@ -150,8 +150,14 @@ def main(datadir, argv):
     args = process_args(datadir)
 
     ui.set_verbose(args.verbose)
+    ui.intro("RenderChan v%s" % __version__)
 
     filename = os.path.abspath(args.file)
+
+    if not args.recursive:
+        ui.rail_blank()
+        ui.log_info(os.path.basename(filename))
+        ui.rail_blank()
 
     renderchan = RenderChan()
 
@@ -260,7 +266,7 @@ def main(datadir, argv):
 
     ui.progress_stop()
     if result in (0, None):
-        ui.outro(_("Done in %s") % ui.format_duration(time.time() - renderchan.start_time))
+        ui.outro(_("Completed in %s") % ui.format_duration(time.time() - renderchan.start_time))
     else:
         ui.outro(_("Failed"))
     return result

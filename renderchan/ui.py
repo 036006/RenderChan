@@ -98,6 +98,7 @@ def _derive_bright(dark) -> tuple:
     return round(r * 255), round(g * 255), round(b * 255)
 
 
+AMBER = "\x1b[38;2;251;191;36m" if COLORS else ""  # bright end of the progress-bar gradient
 RST = "\x1b[0m" if COLORS else ""
 DM = "\x1b[2m" if COLORS else ""
 BOLD = "\x1b[1m" if COLORS else ""
@@ -231,6 +232,7 @@ def outro(message: str = "") -> None:
     if _indent > 0:
         _indent -= 1
     _write(f"{DM}{G['corner_bl']}{RST}  {message}")
+    _write("")  # separate blocks visually (rail-only line when nested)
 
 
 def log_success(message: str) -> None:
@@ -242,7 +244,7 @@ def log_success(message: str) -> None:
 def log_info(message: str) -> None:
     if _VERBOSE:
         return
-    _write(f"{_rail()}{BLU}{G['info_dot']}{RST} {message}")
+    _write(f"{_rail()}{AMBER}{G['info_dot']}{RST} {message}")
 
 
 def log_warn(message: str) -> None:
@@ -296,7 +298,7 @@ def notice(message="") -> None:
     if _VERBOSE:
         _write(str(message))
     else:
-        log_info(str(message))
+        _write(f"{_rail()}{BLU}{G['info_dot']}{RST} {message}")
 
 
 def warn(message) -> None:
@@ -410,7 +412,7 @@ class ShimmerProgress:
 
     def _print_phase_start_locked(self, phase_name: str) -> None:
         prefix = "\r\x1b[K" if self._tty else ""
-        title = f"{phase_name} {self._context}" if self._context and _indent == 0 else phase_name
+        title = f"{phase_name} {self._context}" if self._context and _indent <= 1 else phase_name
         _safe_write(f"{prefix}{_prefix()}{DM}{G['corner_tl']}{RST}  {title}\n")
 
     def _print_phase_done_locked(self) -> None:
@@ -422,6 +424,7 @@ class ShimmerProgress:
         else:
             detail = "  done"
         _safe_write(f"{prefix}{_prefix()}{DM}{G['corner_bl']}{RST}{detail}\n")
+        _safe_write(f"{_prefix()}\n")
         self._phase_name, self._percent, self._count = "", -1, 0
 
     def _render_loop(self) -> None:
