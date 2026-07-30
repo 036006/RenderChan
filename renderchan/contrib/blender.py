@@ -31,9 +31,9 @@ class RenderChanBlenderModule(RenderChanModule):
         info={"dependencies":[]}
 
         script=os.path.join(os.path.dirname(__file__),"blender","analyze.py")
-        dependencyPattern = re.compile("RenderChan dependency: (.*)$")
-        startFramePattern = re.compile("RenderChan start: (.*)$")
-        endFramePattern = re.compile("RenderChan end: (.*)$")
+        dependencyPattern = re.compile(r"RenderChan dependency: (.*)$")
+        startFramePattern = re.compile(r"RenderChan start: (.*)$")
+        endFramePattern = re.compile(r"RenderChan end: (.*)$")
 
         env=os.environ.copy()
         env["PYTHONPATH"]=""
@@ -79,9 +79,9 @@ class RenderChanBlenderModule(RenderChanModule):
         updateCompletion(comp)
 
         totalFrames = endFrame - startFrame + 1
-        frameCompletionPattern = re.compile("Saved:(\d+) Time: .* \(Saving: .*\)")
-        frameCompletionPattern2 = re.compile("Append frame (\d+) Time: .* \(Saving: .*\)")
-        frameNumberPattern = re.compile("Fra:(\d+) Mem:.*")
+        frameCompletionPattern = re.compile(r"Saved:(\d+) Time: .* \(Saving: .*\)")
+        frameCompletionPattern2 = re.compile(r"Append frame (\d+) Time: .* \(Saving: .*\)")
+        frameNumberPattern = re.compile(r"Fra:(\d+) Mem:.*")
 
         stereo_camera = ""
         if extraParams["stereo"]=="left":

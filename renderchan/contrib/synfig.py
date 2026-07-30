@@ -94,7 +94,7 @@ class RenderChanSynfigModule(RenderChanModule):
         dirname=os.path.dirname(filename)
         for i,val in enumerate(info["dependencies"]):
             # Decode unicode characters
-            info["dependencies"][i]=re.sub("&#x([a-zA-Z0-9]+)(;|(?=\s))", _decode_callback, info["dependencies"][i])
+            info["dependencies"][i]=re.sub(r"&#x([a-zA-Z0-9]+)(;|(?=\s))", _decode_callback, info["dependencies"][i])
             if info["dependencies"][i][0]=="#":
                 info["dependencies"][i]="images/"+info["dependencies"][i][1:]
             info["dependencies"][i]=info["dependencies"][i].replace('%20',' ')
