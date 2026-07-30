@@ -152,7 +152,7 @@ def compress_paths(paths):
     """
     numbered = {}
     plain = []
-    pat = re.compile(r"^(.*/)?([^\d/]*?)(\d+)([^\d/]*)$")
+    pat = re.compile(r"^(.*/)?(.*?)(\d+)([^\d/]*)$")  # number = last digit group in basename
     for path in paths:
         m = pat.match(path)
         if not m:
@@ -177,8 +177,9 @@ def compress_paths(paths):
                 out.append("%s%s%0*d-%0*d%s (%d files)" % (
                     dirn, prefix, start[1], start[0], end[1], end[0], suffix, end[0] - start[0] + 1))
             else:
-                for n in range(start[0], end[0] + 1):
-                    out.append("%s%s%d%s" % (dirn, prefix, n, suffix))
+                for n, width in nums:
+                    if start[0] <= n <= end[0]:
+                        out.append("%s%s%0*d%s" % (dirn, prefix, width, n, suffix))
     out.extend(plain)
     return out
 
