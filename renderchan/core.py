@@ -140,6 +140,13 @@ class RenderChan():
 
         """
 
+        if not os.path.exists(filename):
+            display = os.path.relpath(filename)
+            if display.startswith(".."):
+                display = filename
+            ui.error("File not found: %s" % display, stderr=True)
+            return 1
+
         taskfile = RenderChanFile(filename, self.modules, self.projects)
         self.trackFileBegin(taskfile)
 

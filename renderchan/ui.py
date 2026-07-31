@@ -424,6 +424,7 @@ def error(message, stderr=False) -> None:
         print("ERROR: %s" % message, file=stream)
     else:
         _write(f"{_rail()}{RED}{G['err']}{RST} {message}")
+        _write("")
 
 
 # ------------------------------------------------------ shimmer progress ----
