@@ -5,6 +5,7 @@ from renderchan.utils import is_true_string
 from renderchan import ui
 import subprocess
 import os, sys
+import threading
 import errno
 import re
 import locale
@@ -99,6 +100,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
 
         render_tasks = []
         temp_files = []
+        comp_names = []
 
         fps_value = self._last_fps if self._last_fps is not None else 24
         file_lines = None
@@ -140,10 +142,23 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         completed = 0.0
 
         try:
+            grand = 0.0
+            task_frames = []
             for target_file, target_output in render_tasks:
-                self._render_single(target_file, target_output, extraParams, fps_value, startFrame, endFrame)
-                completed += 1.0
-                updateCompletion(completed / total_tasks)
+                frames = self._frame_range(target_file)
+                task_frames.append(frames)
+                grand += frames
+            if grand <= 0:
+                grand = 1.0
+            done_frames = 0.0
+            for i, (target_file, target_output) in enumerate(render_tasks):
+                if i < len(comp_names):
+                    ui.progress_label("Rendering " + comp_names[i])
+                cb = (lambda base=done_frames, tf=task_frames[i]: (
+                    lambda produced: updateCompletion((base + produced) / grand)))()
+                self._render_single(target_file, target_output, extraParams, fps_value, startFrame, endFrame, progress_cb=cb)
+                done_frames += task_frames[i]
+                updateCompletion(done_frames / grand)
 
             if not render_tasks:
                 updateCompletion(1)
@@ -154,7 +169,30 @@ class RenderChanAnimestudio9Module(RenderChanModule):
                 except OSError:
                     pass
 
-    def _render_single(self, filename, outputPath, extraParams, fps_value, startFrame=None, endFrame=None):
+    def _frame_range(self, path):
+        try:
+            with open(path, 'rb') as f:
+                text = f.read().decode('utf-8', errors='replace')
+        except (IOError, OSError):
+            return 0
+        m = re.search(r"frame_range\s+(\d+)\s+(\d+)", text)
+        if m:
+            return int(m.group(2)) - int(m.group(1)) + 1
+        return 0
+
+    def _poll_frames(self, outputPath, existing_pngs, total_frames, progress_cb, stop):
+        last = -1
+        while not stop.is_set():
+            try:
+                count = len([f for f in os.listdir(outputPath) if f.endswith(".png")]) - len(existing_pngs)
+            except OSError:
+                count = last
+            if count != last and count >= 0:
+                last = count
+                progress_cb(min(count, total_frames))
+            stop.wait(0.5)
+
+    def _render_single(self, filename, outputPath, extraParams, fps_value, startFrame=None, endFrame=None, progress_cb=None):
 
         existing_pngs = set()
         if os.path.isdir(outputPath):
@@ -202,25 +240,41 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         ui.info('====================================================')
 
         out = subprocess.Popen(commandline, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        rc = None
-        while True:
-                line = out.stdout.readline()
-                if not line:
-                        if rc is not None:
-                                break
-                try:
-                    line_decoded = line.decode(locale.getpreferredencoding() or 'utf-8')
-                except:
-                    line_decoded = line.decode('latin-1')
 
-                if "send_buffer Failed to get a sample" in line_decoded:
+        total_frames = self._frame_range(filename)
+        if total_frames <= 0 and startFrame is not None and endFrame is not None:
+            total_frames = endFrame - startFrame + 1
+        stop_polling = threading.Event()
+        poller = None
+        if progress_cb and total_frames > 0:
+            poller = threading.Thread(target=self._poll_frames,
+                                      args=(outputPath, existing_pngs, total_frames, progress_cb, stop_polling),
+                                      daemon=True)
+            poller.start()
+        try:
+            rc = None
+            while True:
+                    line = out.stdout.readline()
+                    if not line:
+                            if rc is not None:
+                                    break
+                    try:
+                        line_decoded = line.decode(locale.getpreferredencoding() or 'utf-8')
+                    except:
+                        line_decoded = line.decode('latin-1')
+
+                    if "send_buffer Failed to get a sample" in line_decoded:
+                        rc = out.poll()
+                        continue
+
+                    ui.info(line_decoded.rstrip())
+                    sys.stdout.flush()
+
                     rc = out.poll()
-                    continue
-
-                ui.info(line_decoded.rstrip())
-                sys.stdout.flush()
-
-                rc = out.poll()
+        finally:
+            stop_polling.set()
+            if poller is not None:
+                poller.join(timeout=1)
 
         ui.info('====================================================')
         if rc == 0:
