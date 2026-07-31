@@ -46,9 +46,9 @@ class RenderChanModuleManager():
             if ext==".py" and filename!='__init__' and os.path.isfile(os.path.join(modulesdir,f)):
                 names.append(filename)
         ui.progress_start()
-        for i, name in enumerate(names):
+        for name in names:
             self.load(name)
-            ui.progress("Loading modules", i+1, len(names))
+            ui.progress_tick("Loading modules")
         ui.progress_stop()
 
     def get(self, name):
