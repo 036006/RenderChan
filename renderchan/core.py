@@ -1177,10 +1177,6 @@ class RenderChan():
                 if not uptodate:
 
                     ui.intro("Merging %s to .%s" % (os.path.basename(taskfile.getPath()), format))
-                    # For the mov-via-png workaround the block title already shows the final
-                    # format, and profile_output is the intermediate png path - skip the line
-                    if not ui.is_verbose() and not (format=="mov" and not module_supports_direct_mov):
-                        ui.notice("Merging: %s" % os.path.relpath(profile_output, taskfile.project.getProfilePath()))
 
                     if taskfile.getPacketSize() > 0:
                         if os.path.exists(profile_output_list):
@@ -1411,8 +1407,6 @@ class RenderChan():
         
         if not uptodate:
             ui.intro("Merging %s to .%s (stereo)" % (os.path.basename(taskfile.getPath()), format))
-            if not ui.is_verbose():
-                ui.notice("Merging: %s" % os.path.relpath(output, taskfile.project.path))
             if mode[0:1]=='v':
                 self.run_ffmpeg_progress(
                         ["ffmpeg", "-y", "-i", input_left, "-i", input_right,
