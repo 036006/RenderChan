@@ -151,7 +151,7 @@ def main(datadir, argv):
 
     ui.set_verbose(args.verbose)
     ui._safe_write("\n")
-    ui.intro("RenderChan v%s" % __version__)
+    ui.intro("RenderChan v%s" % __version__, animate=True)
 
     filename = os.path.abspath(args.file)
 

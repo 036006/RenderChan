@@ -308,14 +308,44 @@ def _write(message: str) -> None:
 
 # --------------------------------------------------- clack-like scaffold ----
 
-def intro(title: str, warn: bool = False) -> None:
+_TITLE_ANIM_DURATION = 0.7   # total reveal time, seconds
+_TITLE_ANIM_INTERVAL = 0.03  # frame tick, seconds
+
+
+def _animate_title(prefix: str, text: str) -> None:
+    """Decode-style reveal: spinner glyphs flicker, then the text appears
+    left to right in their place. The ANSI prefix stays static. TTY only."""
+    if not sys.stdout.isatty():
+        return
+    spinner = G["spinner"]
+    n = len(text)
+    start = time.monotonic()
+    while True:
+        elapsed = time.monotonic() - start
+        reveal = int(elapsed / _TITLE_ANIM_DURATION * (n + 1))
+        if reveal >= n:
+            break
+        frame = int(elapsed / 0.15)
+        line = prefix + "".join(
+            text[i] if i < reveal else spinner[(frame + i) % len(spinner)]
+            for i in range(n)
+        )
+        _safe_write("\r\x1b[K" + _prefix() + line)
+        time.sleep(_TITLE_ANIM_INTERVAL)
+    _safe_write("\r\x1b[K")  # leave a clean line for the final static title
+
+
+def intro(title: str, warn: bool = False, animate: bool = False) -> None:
     global _indent
     if _VERBOSE:
         return
     if _progress is not None:
         _progress.close_phase()
     glyph = f"{YLW}{G['warn']}{RST} " if warn else ""
-    _write(f"{DM}{G['corner_tl']}{RST}  {glyph}{title}")
+    static = f"{DM}{G['corner_tl']}{RST}  {glyph}"
+    if animate and sys.stdout.isatty():
+        _animate_title(static, title)
+    _write(static + title)
     _indent += 1
 
 
