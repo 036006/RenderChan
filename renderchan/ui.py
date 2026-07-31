@@ -500,6 +500,7 @@ class ShimmerProgress:
 
         # Current state read by the animation thread
         self._msg = ""
+        self._label = None
         self._anim_percent = -1
         self._anim_count = 0
         self._start = time.monotonic()
@@ -513,6 +514,10 @@ class ShimmerProgress:
     def set_context(self, text: str) -> None:
         self._context = text
 
+    def set_label(self, text) -> None:
+        with self._lock:
+            self._label = text
+
     def on_progress(self, phase: str, current: int = 0, total: int = 0) -> None:
         phase_name = phase
         with self._lock:
@@ -520,6 +525,7 @@ class ShimmerProgress:
                 self._print_phase_done_locked()
             if phase != self._last_phase:
                 self._print_phase_start_locked(phase_name)
+                self._label = None
 
             self._last_phase = phase
             self._phase_name = phase_name
@@ -575,6 +581,7 @@ class ShimmerProgress:
     def _render_frame(self) -> None:
         if not self._msg:
             return
+        msg = self._label or self._msg
         frame = int((time.monotonic() - self._start) / _ANIM_INTERVAL)
         spinner = G["spinner"]
         glyph = spinner[(frame // _FRAMES_PER_GLYPH) % len(spinner)]
@@ -586,13 +593,13 @@ class ShimmerProgress:
             empty = _BAR_WIDTH - filled
             bar = self._render_bar(frame, filled, empty)
             line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
-                    f"{self._msg}  {bar}  {self._anim_percent}%")
+                    f"{msg}  {bar}  {self._anim_percent}%")
         elif self._anim_count > 0:
             count = f"{self._anim_count:,} found".replace(",", " ")
             line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
-                    f"{self._msg}... {count}")
+                    f"{msg}... {count}")
         else:
-            line = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} {self._msg}..."
+            line = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} {msg}..."
 
         _safe_write(f"\r\x1b[K{line}")
 
@@ -644,6 +651,13 @@ def progress(phase: str, current: float = 0, total: float = 0) -> None:
 
 
 _tick_counts = {}
+
+
+def progress_label(text: str) -> None:
+    """Update the animated line's label within the current phase (no block change)."""
+    if _VERBOSE or _progress is None:
+        return
+    _progress.set_label(text)
 
 
 def progress_tick(phase: str) -> None:
