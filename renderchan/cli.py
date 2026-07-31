@@ -150,6 +150,7 @@ def main(datadir, argv):
     args = process_args(datadir)
 
     ui.set_verbose(args.verbose)
+    ui._safe_write("\n")
     ui.intro("RenderChan v%s" % __version__)
 
     filename = os.path.abspath(args.file)

@@ -240,7 +240,9 @@ class RenderChan():
                 # before any rendering starts. Analysis is cached, so this costs almost nothing.
                 self._counting_deps = True
                 self._counted_deps = set()
-                self._missing_deps = []
+                self._dep_edges = []
+                self._dep_edge_set = set()
+                self._missing_abspaths = set()
                 # Warnings are muted here: the real pass below will show them once
                 ui.set_muted(True)
                 try:
@@ -250,16 +252,41 @@ class RenderChan():
                 self._counting_deps = False
                 ui.progress_stop()
                 ui.progress_start()  # restart for the rendering phases
-                if self._missing_deps:
+                if self._missing_abspaths:
+                    adjacency = {}
+                    for parent, child in self._dep_edges:
+                        adjacency.setdefault(parent, []).append(child)
+                    root_path = taskfile.getPath()
+                    project_path = taskfile.project.path if taskfile.project else None
+                    has_missing_cache = {}
+
+                    def has_missing(path, seeing=frozenset()):
+                        if path in self._missing_abspaths:
+                            return True
+                        if path in has_missing_cache:
+                            return has_missing_cache[path]
+                        if path in seeing:
+                            return False
+                        result = any(has_missing(c, seeing | {path}) for c in adjacency.get(path, []))
+                        has_missing_cache[path] = result
+                        return result
+
+                    def disp(path):
+                        return os.path.relpath(path, project_path) if project_path else path
+
+                    def print_node(path):
+                        ui.intro(disp(path), warn=True)
+                        own = [c for c in adjacency.get(path, []) if c in self._missing_abspaths]
+                        for d, text in ui.path_tree_lines([disp(c) for c in own]):
+                            ui.log_line("  " * d + text)
+                        for c in adjacency.get(path, []):
+                            if c not in self._missing_abspaths and has_missing(c):
+                                print_node(c)
+                        ui.section_end()
+
                     ui.intro("Missing dependencies")
-                    parents = {}
-                    for parent, dep in self._missing_deps:
-                        parents.setdefault(parent, []).append(dep)
-                    for parent, deps in parents.items():
-                        ui.log_warn(parent)
-                        for line in ui.compress_paths(deps):
-                            ui.log_line("- " + line)
-                    ui.outro("%d missing" % len(self._missing_deps))
+                    print_node(root_path)
+                    ui.outro("%d missing" % len(self._missing_abspaths))
 
             if stereo in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
 
@@ -783,6 +810,15 @@ class RenderChan():
             else:
                 parsed_deps = None
 
+            def record_edge(dependency, raw_path):
+                if parsed_deps is not None and raw_path in parsed_deps:
+                    # Link to the source taskfile: for render dependencies the loop
+                    # path is the rendered output, while the tree is built from sources
+                    edge = (taskfile.getPath(), dependency.getPath())
+                    if edge not in self._dep_edge_set:
+                        self._dep_edge_set.add(edge)
+                        self._dep_edges.append(edge)
+
             for path in deps:
                 path = os.path.abspath(path)
                 if parsed_deps is not None and path in parsed_deps and path not in self._counted_deps:
@@ -794,8 +830,10 @@ class RenderChan():
                         # Avoid circular dependencies
                         ui.warn("Circular dependency detected for %s. Skipping." % (path))
                         continue
+                    record_edge(dependency, path)
                 else:
                     dependency = RenderChanFile(path, self.modules, self.projects)
+                    record_edge(dependency, path)
                     if not os.path.exists(dependency.getPath()):
                         if self.recreateMissing and dependency.projectPath!='':
                             # Let's look if we have a placeholder template
@@ -812,11 +850,7 @@ class RenderChan():
                         else:
                             ui.info("   Skipping file %s..." % path)
                         if not os.path.exists(dependency.getPath()) and getattr(self, '_counting_deps', False):
-                            pair = (
-                                os.path.relpath(taskfile.getPath(), taskfile.project.path) if taskfile.project else taskfile.getPath(),
-                                os.path.relpath(path, taskfile.project.path) if taskfile.project else path)
-                            if pair not in self._missing_deps:
-                                self._missing_deps.append(pair)
+                            self._missing_abspaths.add(path)
                         continue
                     self.loadedFiles[dependency.getPath()]=dependency
                     if dependency.project!=None and dependency.module!=None:

@@ -184,6 +184,100 @@ def compress_paths(paths):
     return out
 
 
+_MAX_PATH_LINE = 90
+
+
+def path_tree_lines(paths):
+    """Render paths as an indented tree of (depth, text) tuples.
+
+    - common directory prefixes collapse into folder lines, but only when
+      the group has 2+ files and renders as more than one line;
+    - numbered sequences in a folder compress via compress_paths();
+    - a group whose content fits a single line flattens into one
+      "dir/name (N files)" file line without a folder;
+    - any emitted line longer than _MAX_PATH_LINE is chunked by path
+      components, preferring the chunk size of the previously printed
+      sibling folder (keeps neighbours visually aligned).
+    """
+    out = []
+    _tree_level([p.split("/") for p in paths], 0, out, [])
+    return out
+
+
+def _common_dir_prefix(groups):
+    prefix = []
+    for comps in zip(*[g[:-1] for g in groups]):
+        if all(c == comps[0] for c in comps):
+            prefix.append(comps[0])
+        else:
+            break
+    return prefix
+
+
+def _choose_chunk(dir_comps, sibling_chunks):
+    for k in reversed(sibling_chunks):
+        if 0 < k <= len(dir_comps) and len("/".join(dir_comps[:k])) <= _MAX_PATH_LINE:
+            return k
+    total = dir_comps[0]
+    k = 1
+    while k < len(dir_comps) and len(total) + 1 + len(dir_comps[k]) <= _MAX_PATH_LINE:
+        total += "/" + dir_comps[k]
+        k += 1
+    return k
+
+
+def _emit_folder(comps, depth, out, sibling_chunks):
+    if len("/".join(comps)) > _MAX_PATH_LINE:
+        chunks = []
+        rest = comps
+        while rest:
+            k = _choose_chunk(rest, sibling_chunks)
+            chunks.append(rest[:k])
+            sibling_chunks.append(k)
+            rest = rest[k:]
+    else:
+        chunks = [comps]
+        sibling_chunks.append(len(comps))
+    for chunk in chunks:
+        out.append((depth, "/".join(chunk) + "/"))
+        depth += 1
+    return depth
+
+
+def _emit_file(comps, depth, out, sibling_chunks):
+    while len(comps) > 1 and len("/".join(comps)) > _MAX_PATH_LINE:
+        k = _choose_chunk(comps[:-1], sibling_chunks)
+        out.append((depth, "/".join(comps[:k]) + "/"))
+        sibling_chunks.append(k)
+        comps = comps[k:]
+        depth += 1
+    out.append((depth, "- " + "/".join(comps)))
+
+
+def _tree_level(groups, depth, out, sibling_chunks):
+    if len(groups) == 1:
+        _emit_file(groups[0], depth, out, sibling_chunks)
+        return
+    prefix = _common_dir_prefix(groups)
+    rest = [g[len(prefix):] for g in groups] if prefix else groups
+    terminals = [g[0] for g in rest if len(g) == 1]
+    subs = {}
+    for g in rest:
+        if len(g) > 1:
+            subs.setdefault(g[0], []).append(g)
+    term_lines = compress_paths(terminals) if terminals else []
+    if not subs and len(term_lines) == 1:
+        # whole group renders as one line - flatten, no folder
+        _emit_file(prefix + [term_lines[0]], depth, out, sibling_chunks)
+        return
+    if prefix:
+        depth = _emit_folder(prefix, depth, out, sibling_chunks)
+    for text in term_lines:
+        out.append((depth, "- " + text))
+    for comp in subs:
+        _tree_level(subs[comp], depth, out, sibling_chunks)
+
+
 _indent = 0  # block nesting depth (quiet mode); each level adds a rail prefix
 
 
@@ -214,13 +308,14 @@ def _write(message: str) -> None:
 
 # --------------------------------------------------- clack-like scaffold ----
 
-def intro(title: str) -> None:
+def intro(title: str, warn: bool = False) -> None:
     global _indent
     if _VERBOSE:
         return
     if _progress is not None:
         _progress.close_phase()
-    _write(f"{DM}{G['corner_tl']}{RST}  {title}")
+    glyph = f"{YLW}{G['warn']}{RST} " if warn else ""
+    _write(f"{DM}{G['corner_tl']}{RST}  {glyph}{title}")
     _indent += 1
 
 
@@ -234,6 +329,18 @@ def outro(message: str = "") -> None:
         _indent -= 1
     _write(f"{DM}{G['corner_bl']}{RST}  {message}")
     _write("")  # separate blocks visually (rail-only line when nested)
+
+
+def section_end() -> None:
+    """Close a block opened by intro() with a bare corner (no message)."""
+    global _indent
+    if _VERBOSE:
+        return
+    if _progress is not None:
+        _progress.close_phase()
+    if _indent > 0:
+        _indent -= 1
+    _write(f"{DM}{G['corner_bl']}{RST}")
 
 
 def log_success(message: str) -> None:
