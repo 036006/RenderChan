@@ -158,7 +158,13 @@ class RenderChan():
         if not taskfile.module:
             extension = os.path.splitext(taskfile.getPath())[1]
             if extension:
-                ui.error("The '%s' file type was not recoginized." % extension, stderr=True)
+                ext = extension[1:].lower()
+                unavailable = [m.getName() for m in self.modules.list.values()
+                               if ext in m.getInputFormats() and not m.active]
+                if unavailable:
+                    ui.error("The '%s' file type requires the '%s' module, which was not found." % (extension, unavailable[0]), stderr=True)
+                else:
+                    ui.error("The '%s' file type was not recognized." % extension, stderr=True)
             else:
                 ui.error("The provided file does not have an extension.", stderr=True)
             self.trackFileEnd()
