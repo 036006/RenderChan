@@ -16,6 +16,7 @@ main thread is busy rendering.
 """
 
 import colorsys
+import functools
 import math
 import os
 import re
@@ -136,6 +137,26 @@ def set_muted(flag: bool) -> None:
     """Mute warnings (e.g. during a read-only analysis pre-pass)."""
     global _MUTED
     _MUTED = bool(flag)
+
+
+def _quiet_only(func):
+    """Skip the call in verbose mode (quiet-mode-only output)."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if _VERBOSE:
+            return
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def _needs_progress(func):
+    """Skip the call when the shared shimmer animation is not running."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if _progress is None:
+            return
+        return func(*args, **kwargs)
+    return wrapper
 
 
 def format_duration(seconds: float) -> str:
@@ -335,12 +356,15 @@ def _animate_title(prefix: str, text: str) -> None:
     _safe_write("\r\x1b[K")  # leave a clean line for the final static title
 
 
-def intro(title: str, warn: bool = False, animate: bool = False) -> None:
-    global _indent
-    if _VERBOSE:
-        return
+def _close_progress() -> None:
     if _progress is not None:
         _progress.close_phase()
+
+
+@_quiet_only
+def intro(title: str, warn: bool = False, animate: bool = False) -> None:
+    global _indent
+    _close_progress()
     glyph = f"{YLW}{G['warn']}{RST} " if warn else ""
     static = f"{DM}{G['corner_tl']}{RST}  {glyph}"
     if animate and sys.stdout.isatty():
@@ -349,58 +373,51 @@ def intro(title: str, warn: bool = False, animate: bool = False) -> None:
     _indent += 1
 
 
+@_quiet_only
 def outro(message: str = "") -> None:
     global _indent
-    if _VERBOSE:
-        return
-    if _progress is not None:
-        _progress.close_phase()
+    _close_progress()
     if _indent > 0:
         _indent -= 1
     _write(f"{DM}{G['corner_bl']}{RST}  {message}")
     _write("")  # separate blocks visually (rail-only line when nested)
 
 
+@_quiet_only
 def section_end() -> None:
     """Close a block opened by intro() with a bare corner (no message)."""
     global _indent
-    if _VERBOSE:
-        return
-    if _progress is not None:
-        _progress.close_phase()
+    _close_progress()
     if _indent > 0:
         _indent -= 1
     _write(f"{DM}{G['corner_bl']}{RST}")
 
 
+@_quiet_only
+def _log_glyph(color: str, glyph: str, message) -> None:
+    _write(f"{_rail()}{color}{glyph}{RST} {message}")
+
+
 def log_success(message: str) -> None:
-    if _VERBOSE:
-        return
-    _write(f"{_rail()}{GRN}{G['phase_done']}{RST} {message}")
+    _log_glyph(GRN, G['phase_done'], message)
 
 
 def log_info(message: str) -> None:
-    if _VERBOSE:
-        return
-    _write(f"{_rail()}{AMBER}{G['info_dot']}{RST} {message}")
+    _log_glyph(AMBER, G['info_dot'], message)
 
 
 def log_warn(message: str) -> None:
-    if _VERBOSE:
-        return
-    _write(f"{_rail()}{YLW}{G['warn']}{RST} {message}")
+    _log_glyph(YLW, G['warn'], message)
 
 
+@_quiet_only
 def log_line(message: str) -> None:
     """Plain line at the current indent (list items inside blocks)."""
-    if _VERBOSE:
-        return
     _write("  " + str(message))
 
 
+@_quiet_only
 def rail_blank() -> None:
-    if _VERBOSE:
-        return
     _write(f"{_rail()}")
 
 
@@ -421,8 +438,7 @@ def info(message="") -> None:
 
 def debug(message="") -> None:
     """Debug output — verbose only."""
-    if _VERBOSE:
-        _write(str(message))
+    info(message)
 
 
 def blank() -> None:
@@ -436,7 +452,7 @@ def notice(message="") -> None:
     if _VERBOSE:
         _write(str(message))
     else:
-        _write(f"{_rail()}{BLU}{G['info_dot']}{RST} {message}")
+        _log_glyph(BLU, G['info_dot'], message)
 
 
 def warn(message) -> None:
@@ -445,7 +461,7 @@ def warn(message) -> None:
     if _VERBOSE:
         _write("Warning: %s" % message)
     else:
-        _write(f"{_rail()}{YLW}{G['warn']}{RST} {message}")
+        _log_glyph(YLW, G['warn'], message)
 
 
 def error(message, stderr=False) -> None:
@@ -512,28 +528,28 @@ class ShimmerProgress:
     # ---------------------------------------------------------- API ----
 
     def set_context(self, text: str) -> None:
-        self._context = text
+        with self._lock:
+            self._context = text
 
     def set_label(self, text: str) -> None:
         with self._lock:
             self._label = text
 
     def on_progress(self, phase: str, current: int = 0, total: int = 0) -> None:
-        phase_name = phase
         with self._lock:
             if self._last_phase and phase != self._last_phase:
                 self._print_phase_done_locked()
             if phase != self._last_phase:
-                self._print_phase_start_locked(phase_name)
+                self._print_phase_start_locked(phase)
                 self._label = None
 
             self._last_phase = phase
-            self._phase_name = phase_name
+            self._phase_name = phase
 
             percent = round(current / total * 100) if total > 0 else -1
             count = current if total <= 0 and current > 0 else 0
             self._percent, self._count = percent, count
-            self._msg, self._anim_percent, self._anim_count = phase_name, percent, count
+            self._msg, self._anim_percent, self._anim_count = phase, percent, count
 
     def stop(self) -> None:
         self._stop.set()
@@ -589,18 +605,17 @@ class ShimmerProgress:
         t = (math.sin(frame * 2 * math.pi / 13) + 1) / 2
         color = _amber(t, self._dark, self._bright)
 
+        head = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
         if self._anim_percent >= 0:
             filled = round(_BAR_WIDTH * self._anim_percent / 100)
             empty = _BAR_WIDTH - filled
             bar = self._render_bar(frame, filled, empty)
-            line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
-                    f"{msg}  {bar}  {self._anim_percent}%")
+            line = f"{head}{msg}  {bar}  {self._anim_percent}%"
         elif self._anim_count > 0:
             count = f"{self._anim_count:,} found".replace(",", " ")
-            line = (f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} "
-                    f"{msg}... {count}")
+            line = f"{head}{msg}... {count}"
         else:
-            line = f"{_prefix()}{DM}{G['rail']}{RST}  {color}{glyph}{RST} {msg}..."
+            line = f"{head}{msg}..."
 
         _safe_write(f"\r\x1b[K{line}")
 
@@ -634,37 +649,36 @@ def progress_context(text: str) -> None:
         _progress.set_context(text)
 
 
+@_quiet_only
 def progress_start() -> None:
     """Start the shared shimmer animation (quiet mode only)."""
     global _progress
-    if _VERBOSE:
-        return
     if _progress is None:
         _progress = ShimmerProgress()
         _progress.set_context(_progress_context)
 
 
+@_quiet_only
+@_needs_progress
 def progress(phase: str, current: float = 0, total: float = 0) -> None:
     """Report progress; no-op in verbose mode (callers print there instead)."""
-    if _VERBOSE or _progress is None:
-        return
     _progress.on_progress(phase, round(current), round(total))
 
 
 _tick_counts = {}
 
 
+@_quiet_only
+@_needs_progress
 def progress_label(text: str) -> None:
     """Update the animated line's label within the current phase (no block change)."""
-    if _VERBOSE or _progress is None:
-        return
     _progress.set_label(text)
 
 
+@_quiet_only
+@_needs_progress
 def progress_tick(phase: str) -> None:
     """Count-mode progress: 'Resolving dependencies... 12 found'."""
-    if _VERBOSE or _progress is None:
-        return
     _tick_counts[phase] = _tick_counts.get(phase, 0) + 1
     _progress.on_progress(phase, _tick_counts[phase], 0)
 
