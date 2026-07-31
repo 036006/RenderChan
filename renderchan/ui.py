@@ -514,7 +514,7 @@ class ShimmerProgress:
     def set_context(self, text: str) -> None:
         self._context = text
 
-    def set_label(self, text) -> None:
+    def set_label(self, text: str) -> None:
         with self._lock:
             self._label = text
 
@@ -571,6 +571,7 @@ class ShimmerProgress:
         _safe_write(f"{prefix}{_prefix()}{DM}{G['corner_bl']}{RST}{detail}\n")
         _safe_write(f"{_prefix()}\n")
         self._phase_name, self._percent, self._count = "", -1, 0
+        self._label = None
 
     def _render_loop(self) -> None:
         while not self._stop.is_set():
