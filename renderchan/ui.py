@@ -60,7 +60,9 @@ def supports_unicode() -> bool:
             or env.get("TERM") in ("xterm-256color", "alacritty")
             or env.get("TERMINAL_EMULATOR") == "JetBrains-JediTerm"
         )
-    return env.get("TERM") != "linux"
+    if env.get("TERM") in ("linux", "dumb"):
+        return False
+    return "UTF" in (sys.stdout.encoding or "").upper()
 
 
 G = UNICODE_GLYPHS if supports_unicode() else ASCII_GLYPHS
