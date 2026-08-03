@@ -7,7 +7,7 @@ Two modes:
     animated "shimmer" progress (spinner, bar, percent);
   * verbose (ui.set_verbose(True)): the historical plain-text RenderChan output.
 
-Fallbacks: non-TTY -> plain lines without ANSI; NO_COLOR/FORCE_COLOR/--no-color;
+Fallbacks: non-TTY -> plain lines without ANSI; NO_COLOR/FORCE_COLOR;
 Unicode/ASCII glyphs (RENDERCHAN_ASCII=1 / RENDERCHAN_UNICODE=1, TERM=linux,
 Windows terminals).
 
@@ -69,12 +69,7 @@ G = UNICODE_GLYPHS if supports_unicode() else ASCII_GLYPHS
 # ---------------------------------------------------------------- colors ----
 
 def ansi_colors_enabled() -> bool:
-    """--no-color > --color > NO_COLOR > FORCE_COLOR > TTY > CI > off."""
-    argv = sys.argv
-    if "--no-color" in argv:
-        return False
-    if "--color" in argv:
-        return True
+    """NO_COLOR > FORCE_COLOR > TTY > CI > off."""
     if os.environ.get("NO_COLOR"):
         return False
     force = os.environ.get("FORCE_COLOR")
