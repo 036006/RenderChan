@@ -588,6 +588,7 @@ class ShimmerProgress:
         _safe_write(f"{_prefix()}\n")
         self._phase_name, self._percent, self._count = "", -1, 0
         self._label = None
+        self._msg, self._last_phase = "", ""
 
     def _render_loop(self) -> None:
         while not self._stop.is_set():
