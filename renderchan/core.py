@@ -176,7 +176,7 @@ class RenderChan():
 
             ui.blank()
             for file in self.trackedFiles.values():
-                print("File: "+file["source"])
+                ui.notice("File: " + file["source"])
             ui.blank()
 
             # Close cache
@@ -213,7 +213,7 @@ class RenderChan():
                     myzip.write(c, c[len(commonpath)+1:])
 
 
-            print("Written "+os.path.join(os.getcwd(),zipname)+".")
+            ui.notice("Written " + os.path.join(os.getcwd(), zipname) + ".")
             ui.blank()
 
             # Close cache
