@@ -7,8 +7,10 @@ from argparse import SUPPRESS
 import os
 import sys
 import stat
+import time
 
 from renderchan.core import RenderChan, __version__
+from renderchan import ui
 
 
 def _is_hidden(path, name):
@@ -19,7 +21,7 @@ def _is_hidden(path, name):
         try:
             attrs = os.stat(path, follow_symlinks=False).st_file_attributes
         except OSError as e:
-            print("WARNING: Cannot stat %s: %s" % (path, e), file=sys.stderr)
+            ui.warn("Cannot stat %s: %s" % (path, e))
             return False
         return bool(attrs & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_SYSTEM))
     return False
@@ -121,6 +123,10 @@ def process_args(datadir):
             action="store_true",
             default=False,
             help=_("Parse files, but don't render anything."))
+    parser.add_argument("--verbose", dest="verbose",
+            action="store_true",
+            default=False,
+            help=_("Verbose output (the historical plain-text format)."))
     parser.add_argument("--recursive", dest="recursive",
             action="store_true",
             default=False,
@@ -143,7 +149,16 @@ def process_args(datadir):
 def main(datadir, argv):
     args = process_args(datadir)
 
+    ui.set_verbose(args.verbose)
+    ui.quiet_blank()
+    ui.intro("RenderChan v%s" % __version__, animate=True)
+
     filename = os.path.abspath(args.file)
+
+    if not args.recursive:
+        ui.rail_blank()
+        ui.log_info(os.path.basename(filename))
+        ui.rail_blank()
 
     renderchan = RenderChan()
 
@@ -160,20 +175,20 @@ def main(datadir, argv):
             if args.renderfarm_engine in ("puli"):
                 renderchan.setHost(args.host)
             else:
-                print("WARNING: The --host parameter cannot be set for this type of renderfarm.")
+                ui.warn("The --host parameter cannot be set for this type of renderfarm.")
         if args.port:
             if renderchan.renderfarm_engine in ("puli"):
                 renderchan.setPort(args.port)
             else:
-                print("WARNING: The --port parameter cannot be set for this type of renderfarm.")
+                ui.warn("The --port parameter cannot be set for this type of renderfarm.")
 
         if args.cgru_location:
             renderchan.cgru_location = args.cgru_location
     else:
         if args.host:
-            print("WARNING: No renderfarm type given. Ignoring --host parameter.")
+            ui.warn("No renderfarm type given. Ignoring --host parameter.")
         if args.port:
-            print("WARNING: No renderfarm type given. Ignoring --port parameter.")
+            ui.warn("No renderfarm type given. Ignoring --port parameter.")
 
     if args.snapshot_to:
         renderchan.snapshot_path = args.snapshot_to
@@ -199,7 +214,7 @@ def main(datadir, argv):
         
     if args.recursive:
         if not os.path.isdir(filename):
-            print("ERROR: --recursive expects a directory, got a file: %s" % filename, file=sys.stderr)
+            ui.error("--recursive expects a directory, got a file: %s" % filename, stderr=True)
             return 1
 
         success = True
@@ -213,7 +228,7 @@ def main(datadir, argv):
             try:
                 entries = sorted(os.listdir(d))
             except OSError as e:
-                print("WARNING: Cannot list directory %s: %s" % (d, e), file=sys.stderr)
+                ui.warn("Cannot list directory %s: %s" % (d, e))
                 continue
             for f in entries:
                 file = os.path.join(d, f)
@@ -224,7 +239,7 @@ def main(datadir, argv):
                     rel_parts = os.path.relpath(file, filename).split(os.sep)
                 except ValueError as e:
                     # Happens on Windows when crossing drive letters; skip to avoid crashing
-                    print("WARNING: Cannot build relative path for %s: %s" % (file, e), file=sys.stderr)
+                    ui.warn("Cannot build relative path for %s: %s" % (file, e))
                     continue
                 # Skip anything under render/ directory
                 if 'render' in (part.lower() for part in rel_parts):
@@ -238,13 +253,21 @@ def main(datadir, argv):
                     
         for file in files:
             try:
-                print(_("Process file: %s") % (file))
+                ui.info(_("Process file: %s") % (file))
+                ui.log_info(file)
                 renderchan.submit(file, args.dependenciesOnly, args.allocateOnly, args.stereo)
             except:
                 while renderchan.trackedFilesStack:
                     renderchan.trackFileEnd()
-                print(_("Rendering failed for file: %s") % (file))
+                ui.error(_("Rendering failed for file: %s") % (file))
                 success = False
-        return 0 if success else 1
+        result = 0 if success else 1
+    else:
+        result = renderchan.submit(filename, args.dependenciesOnly, args.allocateOnly, args.stereo)
 
-    return renderchan.submit(filename, args.dependenciesOnly, args.allocateOnly, args.stereo)
+    ui.progress_stop()
+    if result in (0, None):
+        ui.outro(_("Completed in %s") % ui.format_duration(time.time() - renderchan.start_time))
+    else:
+        ui.outro(_("Failed"))
+    return result

@@ -10,6 +10,7 @@ import locale
 from zipfile import ZipFile
 from xml.etree import ElementTree
 from renderchan.utils import which
+from renderchan import ui
 
 class RenderChanKritaModule(RenderChanModule):
     def __init__(self):
@@ -34,13 +35,13 @@ class RenderChanKritaModule(RenderChanModule):
     def checkRequirements(self):
         if which(self.conf['binary']) == None:
             self.active=False
-            print("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf['binary']))
-            print("    Please install krita package.")
+            ui.info("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf['binary']))
+            ui.info("    Please install krita package.")
             return False
         if which(self.conf['convert_binary']) == None:
             self.active=False
-            print("Module warning (%s): Cannot find '%s' executable!" % (self.getName(), self.conf['convert_binary']))
-            print("    Please install ImageMagick package.")
+            ui.info("Module warning (%s): Cannot find '%s' executable!" % (self.getName(), self.conf['convert_binary']))
+            ui.info("    Please install ImageMagick package.")
             return False
         self.active=True
 
@@ -68,7 +69,7 @@ class RenderChanKritaModule(RenderChanModule):
 
 
         if rc != 0:
-            print('  Krita command failed (exit code %d)!' % rc)
+            ui.error('Krita command failed (exit code %d)!' % rc)
             self.active = False
 
         return self.active
@@ -135,7 +136,7 @@ class RenderChanKritaModule(RenderChanModule):
                 rc = out.poll()
 
             if rc != 0:
-                print('  Krita command failed (exit code %d)!' % rc)
+                ui.error('Krita command failed (exit code %d)!' % rc)
             else:
                 # Resize result
                 
@@ -153,7 +154,7 @@ class RenderChanKritaModule(RenderChanModule):
                         #print(os.path.join(outputPath, filename))
 
                         commandline = [self.conf['convert_binary'], os.path.join(os.path.dirname(outputPathTmp), filename), "-resize", dimensions, os.path.join(outputPath, filename)]
-                        subprocess.check_call(commandline)
+                        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         # Render single image if Krita reported the file has no animation
         else:
@@ -167,11 +168,11 @@ class RenderChanKritaModule(RenderChanModule):
                 else:
                     #TODO: PNG transperency settings at ~/.kde/share/config/kritarc ? use KDEHOME env ?
                     commandline=[self.conf['binary'], "--export", filename, "--export-filename", outputPathTmp]
-                    subprocess.check_call(commandline)
+                    subprocess.check_call(commandline, **ui.quiet_subprocess())
 
                 dimensions = extraParams["width"]+"x"+extraParams["height"]
                 commandline=[self.conf['convert_binary'], outputPathTmp, "-resize", dimensions, outputPath]
-                subprocess.check_call(commandline)
+                subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         if os.path.exists(os.path.dirname(outputPathTmp)):
             shutil.rmtree(os.path.dirname(outputPathTmp))

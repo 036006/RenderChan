@@ -5,6 +5,7 @@ from urllib.error import HTTPError
 from urllib.request import urlopen, Request
 from html.parser import HTMLParser
 from renderchan.metadata import RenderChanMetadata
+from renderchan import ui
 
 class MyHTMLParser(HTMLParser):
     def __init__(self):
@@ -28,7 +29,7 @@ class MyHTMLParser(HTMLParser):
                     elif value.startswith("http://creativecommons.org/licenses/sampling+"):
                         self.license = "cc-sampling+"
                     else:
-                        print("Error: Unknown license - %s" % value)
+                        ui.error("Unknown license - %s" % value)
 
     def feed(self, data):
         HTMLParser.feed(self, str(data))
@@ -54,7 +55,7 @@ def parse(filename):
 
     if True:
         url = "http://www.freesound.org/people/%s/sounds/%s/" % (user, sound_id)
-        print("Fetching data from %s ..." % url)
+        ui.info("Fetching data from %s ..." % url)
         error = None
         req = Request(url)
         try:
@@ -65,7 +66,7 @@ def parse(filename):
     if error!=None:
         user = user_alt
         url = "http://www.freesound.org/people/%s/sounds/%s/" % (user, sound_id)
-        print("Fetching data from %s ..." % url)
+        ui.info("Fetching data from %s ..." % url)
         error = None
         req = Request(url)
         try:
@@ -76,7 +77,7 @@ def parse(filename):
     if error!=None:
         user = user_alt2
         url = "http://www.freesound.org/people/%s/sounds/%s/" % (user, sound_id)
-        print("Fetching data from %s ..." % url)
+        ui.info("Fetching data from %s ..." % url)
         error = None
         req = Request(url)
         try:
@@ -88,7 +89,7 @@ def parse(filename):
     if error!=None:
         user = user_alt3
         url = "http://www.freesound.org/people/%s/sounds/%s/" % (user, sound_id)
-        print("Fetching data from %s ..." % url)
+        ui.info("Fetching data from %s ..." % url)
         error = None
         req = Request(url)
         try:
@@ -99,14 +100,14 @@ def parse(filename):
     if error!=None:
         user = user_alt4
         url = "http://www.freesound.org/people/%s/sounds/%s/" % (user, sound_id)
-        print("Fetching data from %s ..." % url)
+        ui.info("Fetching data from %s ..." % url)
         error = None
         req = Request(url)
         try:
             f = urlopen(req)
         except HTTPError as e:
             error = e.code
-            print("ERROR: Cannot fetch information for %s" % filename)
+            ui.error("Cannot fetch information for %s" % filename)
 
 
     if error==None:
@@ -123,7 +124,7 @@ def parse(filename):
             metadata.license=parser.license
             metadata.sources=['freesound']
         except:
-            print("ERROR: Error parsing data from freesound! Looks like this sound was deleted...")
+            ui.error("Error parsing data from freesound! Looks like this sound was deleted...")
             metadata.authors.append("%s ( %s ) [DELETED!]" % (user, artist_url))
             metadata.title = basename
             metadata.license = "DELETED"

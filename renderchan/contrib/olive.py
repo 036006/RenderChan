@@ -1,6 +1,7 @@
 __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
+from renderchan import ui
 import subprocess
 import os, sys
 from distutils.version import StrictVersion
@@ -40,13 +41,13 @@ class RenderChanOliveModule(RenderChanModule):
                     # Get the version from stdout. An example of the output: "0.2.0-19eabf28\n"
                     self.version = line.rstrip().split("-")[0]
                     self.version = StrictVersion(self.version)
-                    print("WARNING: Olive version >= 0.2.0 not supported yet.")
+                    ui.warn("Olive version >= 0.2.0 not supported yet.")
                     self.active = False
             else:
                 self.active = False
 
             if self.active == False:
-                print("WARNING: Failed to initialize Olive module.")
+                ui.warn("Failed to initialize Olive module.")
 
         return self.active
 
@@ -110,8 +111,6 @@ class RenderChanOliveModule(RenderChanModule):
     def render(self, filename, outputPath, startFrame, endFrame, format, updateCompletion, extraParams={}):
 
         #if self.version < StrictVersion('0.2.0'):
-            print()
-            print("ERROR: Commandline rendering not implemented for Olive. Aborting.", file=sys.stderr)
-            print()
+            ui.error("Commandline rendering not implemented for Olive. Aborting.", stderr=True)
             exit(1)
 

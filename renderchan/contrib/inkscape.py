@@ -3,6 +3,7 @@
 __author__ = 'scribblemaniac'
 
 from renderchan.module import RenderChanModule
+from renderchan import ui
 import subprocess
 import gzip
 import os
@@ -56,6 +57,6 @@ class RenderChanInkscapeModule(RenderChanModule):
         updateCompletion(comp)
 
         commandline=[self.conf['binary'], "--file=" + filename, "--without-gui", "--export-width=" + extraParams["width"], "--export-height=" + extraParams["height"], "--export-%s=%s" % (format, outputPath)]
-        subprocess.check_call(commandline)
+        subprocess.check_call(commandline, **ui.quiet_subprocess())
 
         updateCompletion(1.0)

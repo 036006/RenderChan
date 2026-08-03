@@ -1,6 +1,7 @@
 __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
+from renderchan import ui
 import subprocess
 import os, sys
 import re
@@ -30,9 +31,9 @@ class RenderChanBlenderModule(RenderChanModule):
         info={"dependencies":[]}
 
         script=os.path.join(os.path.dirname(__file__),"blender","analyze.py")
-        dependencyPattern = re.compile("RenderChan dependency: (.*)$")
-        startFramePattern = re.compile("RenderChan start: (.*)$")
-        endFramePattern = re.compile("RenderChan end: (.*)$")
+        dependencyPattern = re.compile(r"RenderChan dependency: (.*)$")
+        startFramePattern = re.compile(r"RenderChan start: (.*)$")
+        endFramePattern = re.compile(r"RenderChan end: (.*)$")
 
         env=os.environ.copy()
         env["PYTHONPATH"]=""
@@ -68,7 +69,7 @@ class RenderChanBlenderModule(RenderChanModule):
             rc = out.poll()
 
         if rc != 0:
-            print("  Blender command failed (exit code %d)!" % rc)
+            ui.error("Blender command failed (exit code %d)!" % rc)
 
         return info
 
@@ -78,9 +79,9 @@ class RenderChanBlenderModule(RenderChanModule):
         updateCompletion(comp)
 
         totalFrames = endFrame - startFrame + 1
-        frameCompletionPattern = re.compile("Saved:(\d+) Time: .* \(Saving: .*\)")
-        frameCompletionPattern2 = re.compile("Append frame (\d+) Time: .* \(Saving: .*\)")
-        frameNumberPattern = re.compile("Fra:(\d+) Mem:.*")
+        frameCompletionPattern = re.compile(r"Saved:(\d+) Time: .* \(Saving: .*\)")
+        frameCompletionPattern2 = re.compile(r"Append frame (\d+) Time: .* \(Saving: .*\)")
+        frameNumberPattern = re.compile(r"Fra:(\d+) Mem:.*")
 
         stereo_camera = ""
         if extraParams["stereo"]=="left":
@@ -89,7 +90,7 @@ class RenderChanBlenderModule(RenderChanModule):
             stereo_camera = "right"
 
         if (extraParams["disable_gpu"]!="False") or ('BLENDER_DISABLE_GPU' in os.environ):
-            print("================== FORCE DISABLE GPU =====================")
+            ui.info("================== FORCE DISABLE GPU =====================")
             gpu_device='None'
         else:
             gpu_device='"'+self.conf["gpu_device"]+'"'
@@ -118,9 +119,9 @@ class RenderChanBlenderModule(RenderChanModule):
             else:
                 outputPath=os.path.join(outputPath, "file")+".#####"
 
-        print('====================================================')
-        print('  Output Path: %s' % outputPath)
-        print('====================================================')
+        ui.info('====================================================')
+        ui.info('  Output Path: %s' % outputPath)
+        ui.info('====================================================')
 
         env=os.environ.copy()
         env["PYTHONPATH"]=""
@@ -152,7 +153,7 @@ class RenderChanBlenderModule(RenderChanModule):
                     break
             line = line.decode(sys.stdout.encoding)
 
-            print(line, end=' ')
+            ui.info(line.rstrip())
             sys.stdout.flush()
 
             if line.startswith("CUDA error: Out of memory"):
@@ -174,9 +175,9 @@ class RenderChanBlenderModule(RenderChanModule):
                         updateCompletion(comp + fc)
             rc = out.poll()
 
-        print('====================================================')
-        print('  Blender command returns with code %d' % rc)
-        print('====================================================')
+        ui.info('====================================================')
+        ui.info('  Blender command returns with code %d' % rc)
+        ui.info('====================================================')
 
         if format in RenderChanModule.imageExtensions and extraParams["single"]!="None":
             outputPath=outputPath[:-7]
@@ -184,7 +185,7 @@ class RenderChanBlenderModule(RenderChanModule):
             os.rename(tmp, outputPath)
 
         if rc != 0:
-            print('  Blender command failed...')
+            ui.error('Blender command failed...')
             raise Exception('  Blender command failed...')
 
         os.remove(renderscript)

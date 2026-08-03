@@ -3,6 +3,7 @@ __author__ = 'Ivan Mahonin'
 from gettext import gettext as _
 from argparse import ArgumentParser
 from renderchan.core import RenderChan
+from renderchan import ui
 from renderchan.utils import ini_wrapper
 import os
 import subprocess
@@ -419,6 +420,8 @@ def process_args():
 
 def main(datadir, argv):
     args = process_args()
+
+    ui.set_verbose(True)
     
     if datadir:
         datadir = os.path.abspath(datadir)

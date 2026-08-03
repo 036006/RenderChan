@@ -8,6 +8,7 @@ import socket
 import tempfile
 import time
 from renderchan.utils import mkdirs, LockThread
+from renderchan import ui
 
 LOCK_STALE_TIMEOUT = 300      # seconds; lock not updated for this long is assumed stale
 LOCK_HEARTBEAT_INTERVAL = 60  # seconds between lockfile mtime updates
@@ -45,9 +46,9 @@ class RenderChanCache():
             self.closed = False
 
         except sqlite3.Error as e:
-            print("ERROR: Cannot initialize cache database.")
-            print("SQLite error: %s" % e.args[0])
-            print("Cache file path: %s" % self.local_path)
+            ui.error("Cannot initialize cache database.")
+            ui.error("SQLite error: %s" % e.args[0])
+            ui.error("Cache file path: %s" % self.local_path)
 
     def _acquire_lock(self):
         if os.path.exists(self.lockfile):
@@ -55,11 +56,11 @@ class RenderChanCache():
             lock_age = time.time() - lock_mtime
             if lock_age >= LOCK_STALE_TIMEOUT:
                 lock_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(lock_mtime))
-                print("WARNING: Cache lock is stale (last updated %s), removing: %s" % (lock_time_str, self.lockfile))
+                ui.warn("Cache lock is stale (last updated %s), removing: %s" % (lock_time_str, self.lockfile))
                 try:
                     os.remove(self.lockfile)
                 except Exception:
-                    print("ERROR: Cannot remove stale lock file: %s" % self.lockfile)
+                    ui.error("Cannot remove stale lock file: %s" % self.lockfile)
                     return False
             else:
                 try:
@@ -67,15 +68,15 @@ class RenderChanCache():
                         locked_by = f.read().strip()
                 except Exception:
                     locked_by = "(unknown)"
-                print("ERROR: Cache is locked by '%s' (%.0f s ago)." % (locked_by, lock_age))
-                print("If the lock is stale, delete the lock file:")
-                print("  %s" % self.lockfile)
+                ui.error("Cache is locked by '%s' (%.0f s ago)." % (locked_by, lock_age))
+                ui.error("If the lock is stale, delete the lock file:")
+                ui.error("  %s" % self.lockfile)
                 return False
         try:
             with open(self.lockfile, 'w') as f:
                 f.write("%s:%d\n" % (socket.gethostname(), os.getpid()))
         except Exception:
-            print("ERROR: Cannot create lock file: %s" % self.lockfile)
+            ui.error("Cannot create lock file: %s" % self.lockfile)
             return False
         self._lock_heartbeat = LockThread(self.lockfile, interval=LOCK_HEARTBEAT_INTERVAL)
         self._lock_heartbeat.start()
@@ -89,7 +90,7 @@ class RenderChanCache():
             if os.path.exists(self.lockfile):
                 os.remove(self.lockfile)
         except Exception as e:
-            print("WARNING: Cannot remove lock file '%s': %s" % (self.lockfile, e))
+            ui.warn("Cannot remove lock file '%s': %s" % (self.lockfile, e))
 
     def __del__(self):
         if not self.closed:
@@ -104,7 +105,7 @@ class RenderChanCache():
             try:
                 shutil.copy(self.local_path, self.path)
             except Exception as e:
-                print("ERROR: Cannot save cache to '%s': %s" % (self.path, e))
+                ui.error("Cannot save cache to '%s': %s" % (self.path, e))
             self._release_lock()
 
         try:
@@ -113,7 +114,7 @@ class RenderChanCache():
         except Exception:
             pass
 
-        print("Cache closed.")
+        ui.info("Cache closed.")
 
     def getInfo(self, path):
         if self.closed:
@@ -133,7 +134,7 @@ class RenderChanCache():
             else:
                 return None
         except:
-            print("ERROR: Cannot read from database.", file=sys.stderr)
+            ui.error("Cannot read from database.", stderr=True)
             return None
 
     def getDependencies(self, path):
@@ -155,12 +156,12 @@ class RenderChanCache():
             else:
                 return None
         except:
-            print("ERROR: Cannot read from database.")
+            ui.error("Cannot read from database.")
             return None
 
     def write(self, path, timestamp, start, end, dependencies, width, height):
         if self.closed:
-            print("ERROR: Database is closed. Writing isn't possible.")
+            ui.error("Database is closed. Writing isn't possible.")
             return None
 
         if not self.readonly and not self._locked:
@@ -199,4 +200,4 @@ class RenderChanCache():
         try:
             self.connection.commit()
         except:
-            print("ERROR: Cannot write into database.")
+            ui.error("Cannot write into database.")

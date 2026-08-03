@@ -2,8 +2,10 @@ __author__ = '036006'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import is_true_string
+from renderchan import ui
 import subprocess
 import os, sys
+import threading
 import errno
 import re
 import locale
@@ -37,7 +39,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         try:
             lines = self._read_file_lines(filename)
         except IOError as e:
-            print("Error reading AnimeStudio9 file %s: %s" % (filename, str(e)))
+            ui.error("Error reading AnimeStudio9 file %s: %s" % (filename, str(e)))
             return info
 
         frame_pattern = re.compile(r"^frame_range\s+(\d+)\s+(\d+)")
@@ -66,7 +68,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             if match:
                 info["fps"] = int(match.group(1))
                 self._last_fps = info["fps"]
-                print("    AnimeStudio9 fps: %d" % info["fps"])
+                ui.info("    AnimeStudio9 fps: %d" % info["fps"])
                 continue
 
             match = dimensions_pattern.match(stripped)
@@ -87,7 +89,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             self._last_fps = None
 
         if len(dependencies) > 0:
-            print("    AnimeStudio9 dependencies: %d" % len(dependencies))
+            ui.info("    AnimeStudio9 dependencies: %d" % len(dependencies))
             info["dependencies"] = dependencies
         return info
 
@@ -98,6 +100,7 @@ class RenderChanAnimestudio9Module(RenderChanModule):
 
         render_tasks = []
         temp_files = []
+        comp_names = []
 
         fps_value = self._last_fps if self._last_fps is not None else 24
         file_lines = None
@@ -106,21 +109,21 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         layer_comp_enabled = is_true_string(layer_comp_value) or layer_comp_value.upper() == "ALL"
 
         if layer_comp_enabled:
-            print('====================================================')
-            print('  AnimeStudio9 layer_composition: enabled (%s)' % layer_comp_value)
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 layer_composition: enabled (%s)' % layer_comp_value)
             if file_lines is None:
                 file_lines = self._read_file_lines(filename)
             compositions = self._parse_layer_compositions(file_lines)
             target_folder = outputPath
 
             comp_names = [name for name, _ in compositions]
-            print('====================================================')
-            print('  AnimeStudio9 compositions: %d' % len(comp_names))
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 compositions: %d' % len(comp_names))
             if comp_names:
-                print('   ' + ', '.join(comp_names))
+                ui.info('   ' + ', '.join(comp_names))
             else:
-                print('   (no compositions found)')
-            print('====================================================')
+                ui.info('   (no compositions found)')
+            ui.info('====================================================')
 
             if compositions:
                 for comp_name, layer_ids in compositions:
@@ -130,19 +133,32 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             else:
                 render_tasks.append((filename, target_folder))
         else:
-            print('====================================================')
-            print('  AnimeStudio9 layer_composition: DISABLED')
-            print('====================================================')
+            ui.info('====================================================')
+            ui.info('  AnimeStudio9 layer_composition: DISABLED')
+            ui.info('====================================================')
             render_tasks.append((filename, outputPath))
 
         total_tasks = float(len(render_tasks))
         completed = 0.0
 
         try:
+            grand = 0.0
+            task_frames = []
             for target_file, target_output in render_tasks:
-                self._render_single(target_file, target_output, extraParams, fps_value, startFrame, endFrame)
-                completed += 1.0
-                updateCompletion(completed / total_tasks)
+                frames = self._frame_range(target_file)
+                task_frames.append(frames)
+                grand += frames
+            if grand <= 0:
+                grand = 1.0
+            done_frames = 0.0
+            for i, (target_file, target_output) in enumerate(render_tasks):
+                if i < len(comp_names):
+                    ui.progress_label("Rendering " + comp_names[i])
+                cb = (lambda base=done_frames, tf=task_frames[i]: (
+                    lambda produced: updateCompletion((base + produced) / grand)))()
+                self._render_single(target_file, target_output, extraParams, fps_value, startFrame, endFrame, progress_cb=cb)
+                done_frames += task_frames[i]
+                updateCompletion(done_frames / grand)
 
             if not render_tasks:
                 updateCompletion(1)
@@ -153,7 +169,30 @@ class RenderChanAnimestudio9Module(RenderChanModule):
                 except OSError:
                     pass
 
-    def _render_single(self, filename, outputPath, extraParams, fps_value, startFrame=None, endFrame=None):
+    def _frame_range(self, path):
+        try:
+            with open(path, 'rb') as f:
+                text = f.read().decode('utf-8', errors='replace')
+        except (IOError, OSError):
+            return 0
+        m = re.search(r"frame_range\s+(\d+)\s+(\d+)", text)
+        if m:
+            return int(m.group(2)) - int(m.group(1)) + 1
+        return 0
+
+    def _poll_frames(self, outputPath, existing_pngs, total_frames, progress_cb, stop):
+        last = -1
+        while not stop.is_set():
+            try:
+                count = len([f for f in os.listdir(outputPath) if f.endswith(".png")]) - len(existing_pngs)
+            except OSError:
+                count = last
+            if count != last and count >= 0:
+                last = count
+                progress_cb(min(count, total_frames))
+            stop.wait(0.5)
+
+    def _render_single(self, filename, outputPath, extraParams, fps_value, startFrame=None, endFrame=None, progress_cb=None):
 
         existing_pngs = set()
         if os.path.isdir(outputPath):
@@ -195,38 +234,54 @@ class RenderChanAnimestudio9Module(RenderChanModule):
             commandline.append("-halfsize")
             commandline.append("yes")
 
-        print('====================================================')
-        print('  AnimeStudio9 Render Command:')
-        print('  ' + ' '.join(commandline))
-        print('====================================================')
+        ui.info('====================================================')
+        ui.info('  AnimeStudio9 Render Command:')
+        ui.info('  ' + ' '.join(commandline))
+        ui.info('====================================================')
 
         out = subprocess.Popen(commandline, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        rc = None
-        while True:
-                line = out.stdout.readline()
-                if not line:
-                        if rc is not None:
-                                break
-                try:
-                    line_decoded = line.decode(locale.getpreferredencoding() or 'utf-8')
-                except:
-                    line_decoded = line.decode('latin-1')
 
-                if "send_buffer Failed to get a sample" in line_decoded:
+        total_frames = self._frame_range(filename)
+        if total_frames <= 0 and startFrame is not None and endFrame is not None:
+            total_frames = endFrame - startFrame + 1
+        stop_polling = threading.Event()
+        poller = None
+        if progress_cb and total_frames > 0:
+            poller = threading.Thread(target=self._poll_frames,
+                                      args=(outputPath, existing_pngs, total_frames, progress_cb, stop_polling),
+                                      daemon=True)
+            poller.start()
+        try:
+            rc = None
+            while True:
+                    line = out.stdout.readline()
+                    if not line:
+                            if rc is not None:
+                                    break
+                    try:
+                        line_decoded = line.decode(locale.getpreferredencoding() or 'utf-8')
+                    except:
+                        line_decoded = line.decode('latin-1')
+
+                    if "send_buffer Failed to get a sample" in line_decoded:
+                        rc = out.poll()
+                        continue
+
+                    ui.info(line_decoded.rstrip())
+                    sys.stdout.flush()
+
                     rc = out.poll()
-                    continue
+        finally:
+            stop_polling.set()
+            if poller is not None:
+                poller.join(timeout=1)
 
-                print(line_decoded, end='')
-                sys.stdout.flush()
-
-                rc = out.poll()
-
-        print('====================================================')
+        ui.info('====================================================')
         if rc == 0:
-            print('  AnimeStudio9 render completed successfully')
+            ui.info('  AnimeStudio9 render completed successfully')
         else:
-            print('  AnimeStudio9 command returns with code %d' % rc)
-        print('====================================================')
+            ui.info('  AnimeStudio9 command returns with code %d' % rc)
+        ui.info('====================================================')
 
         if rc != 0:
             raise Exception('AnimeStudio9 render failed with exit code %d' % rc)

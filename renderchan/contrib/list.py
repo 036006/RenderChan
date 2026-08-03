@@ -2,6 +2,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from renderchan.module import RenderChanModule
 from renderchan.utils import is_true_string
+from renderchan import ui
 import subprocess
 import gzip
 import os, sys
@@ -39,12 +40,12 @@ class RenderChanListModule(RenderChanModule):
             else:
                 path=os.path.join(dir,line.strip())
                 if os.path.isdir(path):
-                    print("is dir")
+                    ui.debug("is dir")
                     for root, dirs, files in os.walk(path):
                         for file in files:
                             info["dependencies"].append(os.path.join(root, file))
                 else:
-                    print("is file")
+                    ui.debug("is file")
                     info["dependencies"].append(path)
 
         f.close()
@@ -57,8 +58,6 @@ class RenderChanListModule(RenderChanModule):
         updateCompletion(comp)
 
 
-        print('================================================================')
-        print('WARNING:  No rendering available for lst files yet. Skipping.')
-        print('================================================================')
+        ui.warn('No rendering available for lst files yet. Skipping.')
 
         updateCompletion(1)

@@ -2,6 +2,7 @@ __author__ = 'Konstantin Dmitriev'
 
 from importlib import import_module
 from renderchan.utils import which
+from renderchan import ui
 import os, sys
 import inspect
 import configparser
@@ -31,19 +32,24 @@ class RenderChanModuleManager():
 
         module = moduleClass()
         module.loadConfiguration()
-        print("Loading module: " + name + "...")
+        ui.info("Loading module: " + name + "...")
         if not module.checkRequirements():
-            print("Warning: Unable load module - %s." % (name))
+            ui.info("Unable load module - %s." % (name))
         self.list[name]=module
 
     def loadAll(self):
         dir = os.path.dirname(os.path.abspath(__file__))
         modulesdir = os.path.join(dir, "contrib")
-        files = [ f for f in os.listdir(modulesdir) if os.path.isfile(os.path.join(modulesdir,f)) ]
-        for f in files:
+        names = []
+        for f in os.listdir(modulesdir):
             filename, ext = os.path.splitext(f)
-            if ext==".py" and filename!='__init__':
-                self.load(filename)
+            if ext==".py" and filename!='__init__' and os.path.isfile(os.path.join(modulesdir,f)):
+                names.append(filename)
+        ui.progress_start()
+        for name in names:
+            self.load(name)
+            ui.progress_tick("Loading modules")
+        ui.progress_stop()
 
     def get(self, name):
         if name not in self.list:
@@ -111,10 +117,10 @@ class RenderChanModule():
     def setConfiguration(self, conf):
         for key,value in list(conf.items()):
             if key not in self.conf:
-                print("Module %s doesn't accept configuration key '%s': No such entry." % (self.__class__.__name__, key))
+                ui.info("Module %s doesn't accept configuration key '%s': No such entry." % (self.__class__.__name__, key))
                 continue
             if not type(self.conf[key]).__name__ == type(conf[key]).__name__:
-                print("Module %s doesn't accept configuration value for key '%s': Wrong type." % (self.__class__.__name__, key))
+                ui.info("Module %s doesn't accept configuration value for key '%s': Wrong type." % (self.__class__.__name__, key))
                 continue
             self.conf[key] = conf[key]
 
@@ -123,8 +129,8 @@ class RenderChanModule():
             binary_path = which(self.conf['binary'])
             if binary_path == None:
                 self.active=False
-                print("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf["binary"]))
-                print("    Please install %s package." % (self.getName()))
+                ui.info("Module warning (%s): Cannot find '%s' executable." % (self.getName(), self.conf["binary"]))
+                ui.info("    Please install %s package." % (self.getName()))
             else:
                 # Workaround because some applications (gimp) cannot be executed via symlink
                 self.conf['binary'] = binary_path
@@ -167,8 +173,8 @@ class RenderChanModule():
                 if binary_path:
                     return binary_path
                 else:
-                    print("    Cannot find path to %s package in %s." % (name, path))
-                    print("    Please make sure to install %s and write correct path to %s file." % (name, path))
+                    ui.info("    Cannot find path to %s package in %s." % (name, path))
+                    ui.info("    Please make sure to install %s and write correct path to %s file." % (name, path))
                     return name
         
         binary_suffix=""
