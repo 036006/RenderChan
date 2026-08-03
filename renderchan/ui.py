@@ -317,9 +317,11 @@ def _safe_write(text: str) -> None:
 
 
 def _write(message: str) -> None:
+    text = _prefix() + message + "\n"
     if _progress is not None:
-        _progress.interrupt()
-    _safe_write(_prefix() + message + "\n")
+        _progress.write_over(text)
+    else:
+        _safe_write(text)
 
 
 # --------------------------------------------------- clack-like scaffold ----
@@ -558,11 +560,12 @@ class ShimmerProgress:
         with self._lock:
             self._print_phase_done_locked()
 
-    def interrupt(self) -> None:
-        """Erase the animation line so a permanent line can be printed cleanly."""
+    def write_over(self, text: str) -> None:
+        """Erase the animation line and write a permanent line atomically."""
         with self._lock:
             if self._tty and self._msg:
                 _safe_write("\r\x1b[K")
+            _safe_write(text)
 
     # ------------------------------------------------------ internals ----
 
