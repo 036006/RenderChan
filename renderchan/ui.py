@@ -444,6 +444,12 @@ def blank() -> None:
         _write("")
 
 
+@_quiet_only
+def quiet_blank() -> None:
+    """Empty line — quiet mode only (pair to blank(), which is verbose-only)."""
+    _write("")
+
+
 def notice(message="") -> None:
     """User-facing info in both modes: plain in verbose, clack line in quiet."""
     if _VERBOSE:
