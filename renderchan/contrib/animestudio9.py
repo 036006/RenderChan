@@ -255,15 +255,21 @@ class RenderChanAnimestudio9Module(RenderChanModule):
         normalized = os.path.expanduser(cleaned.replace("\\", os.sep))
 
         if re.match(r"^[A-Za-z]:[\\/]", cleaned):
-            return os.path.normpath(normalized)
+            resolved = os.path.normpath(normalized)
+        elif normalized.startswith("//") or normalized.startswith("\\\\"):
+            resolved = os.path.normpath(normalized)
+        elif os.path.isabs(normalized):
+            resolved = os.path.normpath(normalized)
+        else:
+            resolved = os.path.normpath(os.path.join(base_dir, normalized))
 
-        if normalized.startswith("//") or normalized.startswith("\\\\"):
-            return os.path.normpath(normalized)
-
-        if os.path.isabs(normalized):
-            return os.path.normpath(normalized)
-
-        return os.path.normpath(os.path.join(base_dir, normalized))
+        if not os.path.exists(resolved):
+            # Moho finds media by name in its own folder when the stored path
+            # is stale (same fallback as the synfig module).
+            fallback = os.path.join(base_dir, os.path.basename(normalized))
+            if os.path.exists(fallback):
+                return os.path.normpath(fallback)
+        return resolved
 
     def _parse_layer_compositions(self, lines):
         compositions = []
