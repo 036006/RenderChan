@@ -653,10 +653,13 @@ class RenderChan():
                     chunk_format = "png"
                 ui.progress_context("%s to .%s (%s)" % (os.path.basename(taskfile.getPath()), chunk_format, taskfile.module.getName()))
 
-                for range in segments:
+                for i, range in enumerate(segments):
                     start=range[0]
                     end=range[1]
-                    self.job_render(taskfile, chunk_format, self.updateCompletion, start, end, compare_time)
+                    # Scale per-segment completion into the overall range,
+                    # so the bar runs 0..100 once, not once per packet
+                    seg_cb = (lambda i=i: lambda v: self.updateCompletion((i + v) / len(segments)))()
+                    self.job_render(taskfile, chunk_format, seg_cb, start, end, compare_time)
 
                 ui.progress_context("%s to .%s" % (os.path.basename(taskfile.getPath()), taskfile.getFormat()))
                 self.job_merge(taskfile, taskfile.getFormat(), taskfile.project.getConfig("stereo"), compare_time)
