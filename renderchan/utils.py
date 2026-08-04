@@ -31,6 +31,32 @@ def which(program):
 
     return None
 
+_hardlinks_broken = False
+
+def link_or_copy(src, dst):
+    """Hardlink src to dst, falling back to a real copy.
+
+    On CIFS mounts a fresh hardlink can be unreadable for a second or two
+    (attribute cache) or broken entirely, while os.link() itself reports
+    success - so the link is verified by actually reading it."""
+    global _hardlinks_broken
+    if not _hardlinks_broken:
+        try:
+            os.link(src, dst)
+        except OSError:
+            _hardlinks_broken = True
+        else:
+            for _ in range(10):  # up to ~3 s for the link to become readable
+                try:
+                    with open(dst, 'rb') as f:
+                        f.read(1)
+                    return
+                except OSError:
+                    time.sleep(0.3)
+            os.remove(dst)
+            _hardlinks_broken = True
+    shutil.copy2(src, dst)
+
 def copytree(src, dst, symlinks=False, hardlinks=False, ignore=None):
     names = os.listdir(src)
     if ignore is not None:
@@ -53,7 +79,7 @@ def copytree(src, dst, symlinks=False, hardlinks=False, ignore=None):
             elif os.path.isdir(srcname):
                 copytree(srcname, dstname, symlinks, hardlinks, ignore)
             elif hardlinks:
-                os.link(srcname, dstname)
+                link_or_copy(srcname, dstname)
             else:
                 shutil.copy2(srcname, dstname)
             # XXX What about devices, sockets etc.?
@@ -156,12 +182,8 @@ def sync(profile_output, output, compareTime=None):
                             raise Exception('ERROR: Cannot sync profile data.')
                 else:
                     try:
-                        os.link(profile_output, output)
+                        link_or_copy(profile_output, output)
                     except:
-                        ui.warn("Cannot create a symlink.")
-                        try:
-                            shutil.copyfile(profile_output, output)
-                        except:
                             raise Exception('ERROR: Cannot sync profile data.')
 
             if not os.path.exists(output):
