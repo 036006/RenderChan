@@ -79,9 +79,10 @@ class RenderChanBlenderModule(RenderChanModule):
         updateCompletion(comp)
 
         totalFrames = endFrame - startFrame + 1
-        frameCompletionPattern = re.compile(r"Saved:(\d+) Time: .* \(Saving: .*\)")
-        frameCompletionPattern2 = re.compile(r"Append frame (\d+) Time: .* \(Saving: .*\)")
-        frameNumberPattern = re.compile(r"Fra:(\d+) Mem:.*")
+        frameNumberPattern = re.compile(r"Fra:(\d+)")
+        frameStartPattern = re.compile(r"Rendering frame (\d+)")  # Blender >= 5 log format
+        frameSavedPattern = re.compile(r"Saved:")
+        frameAppendPattern = re.compile(r"(?:Append|Video append) frame (\d+)")
 
         stereo_camera = ""
         if extraParams["stereo"]=="left":
@@ -160,19 +161,20 @@ class RenderChanBlenderModule(RenderChanModule):
                 out.kill()
                 raise Exception('  Blender command failed...')
 
-            fn = frameNumberPattern.search(line)
+            fn = frameNumberPattern.search(line) or frameStartPattern.search(line)
             if fn:
-                currentFrame = float(fn.group(1).strip())
+                currentFrame = int(fn.group(1))
+                fc = (currentFrame - startFrame) / float(totalFrames)
+                updateCompletion(comp + min(fc, 1.0))
             elif currentFrame is not None:
-                fcp = frameCompletionPattern.search(line)
-                if fcp:
-                    fc = float(currentFrame / 100) / float(totalFrames)
-                    updateCompletion(comp + fc)
+                if frameSavedPattern.search(line):
+                    fc = (currentFrame - startFrame + 1) / float(totalFrames)
+                    updateCompletion(comp + min(fc, 1.0))
                 else:
-                    fcp = frameCompletionPattern2.search(line)
+                    fcp = frameAppendPattern.search(line)
                     if fcp:
-                        fc = float(currentFrame / 100) / float(totalFrames)
-                        updateCompletion(comp + fc)
+                        fc = (int(fcp.group(1)) - startFrame + 1) / float(totalFrames)
+                        updateCompletion(comp + min(fc, 1.0))
             rc = out.poll()
 
         ui.info('====================================================')
