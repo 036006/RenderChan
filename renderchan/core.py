@@ -10,6 +10,7 @@ from renderchan.utils import float_trunc
 from renderchan.utils import sync
 from renderchan.utils import touch
 from renderchan.utils import copytree
+from renderchan.utils import link_or_copy
 from renderchan.utils import which
 from renderchan.utils import is_true_string
 from renderchan import ui
@@ -1040,14 +1041,16 @@ class RenderChan():
             if m and total_frames > 0:
                 ui.progress(phase, min(int(m.group(1)), total_frames), total_frames)
         rc = proc.wait()
-        if rc != 0:
-            errlog.seek(0)
-            tail = errlog.read().decode("utf-8", errors="replace").splitlines()
-            errlog.close()
-            for line in tail[-10:]:
-                ui.error(line)
-            raise subprocess.CalledProcessError(rc, cmd)
+        errlog.seek(0)
+        log = errlog.read().decode("utf-8", errors="replace")
         errlog.close()
+        # image2 demuxer stops at the first unreadable frame but still exits 0,
+        # silently producing a shorter video - treat that as a failure
+        if rc == 0 and "Could not open file" not in log and "Conversion failed" not in log:
+            return
+        for line in log.splitlines()[-10:]:
+            ui.error(line)
+        raise subprocess.CalledProcessError(rc or 1, cmd)
 
     def job_render(self, taskfile, format, updateCompletion, start=None, end=None, compare_time=None):
         """
@@ -1226,7 +1229,7 @@ class RenderChan():
                                         dst_file_path = os.path.join(dst_dir, new_filename)
                                         try:
                                             if not os.path.isdir(src_file_path):
-                                                os.link(src_file_path, dst_file_path)
+                                                link_or_copy(src_file_path, dst_file_path)
                                         except (IOError, os.error) as why:
                                             errors.append((src_file_path, dst_file_path, str(why)))
                                         # catch the Error from the recursive copytree so that we can
