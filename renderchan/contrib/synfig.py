@@ -117,9 +117,9 @@ class RenderChanSynfigModule(RenderChanModule):
         comp = 0.0
         updateCompletion(comp)
 
-        totalFrames = endFrame - startFrame + 1
-        #/path/to/file.sifz.png: Line 10 of 100 -- 1m 14s
-        frameNumberPattern = re.compile(": Line (\d+) of \d+ -- ")
+        # old synfig: /path/to/file.sifz.png: Line 10 of 100 -- 1m 14s
+        # new synfig: /path/file.sif ==> /path/out.avi: Iteration 0: Frame 5 of 250 (2%). Remaining time: 9s
+        frameNumberPattern = re.compile(r"(?:Line|Frame) (\d+) of (\d+)")
 
         if format in RenderChanModule.imageExtensions and extraParams["single"]=="None":
             try:
@@ -163,23 +163,27 @@ class RenderChanSynfigModule(RenderChanModule):
         #print(" ".join(commandline))
         out = subprocess.Popen(commandline, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
         rc = None
+        buf = ""
         while True:
-            #line = out.stdout.readline().decode("utf-8")
-            line = out.stdout.readline().decode(locale.getpreferredencoding(), errors='replace')
-            #line = out.stdout.readline()
-            if not line:
-                if rc is not None:
-                    break
-            #print(line, end=' ')
-            if ui.is_verbose():
-                sys.stdout.buffer.write(line.encode(locale.getpreferredencoding(), errors='replace'))
-                sys.stdout.flush()
-            fn = frameNumberPattern.search(line)
-            if fn:
-                currentFrame = float(fn.group(1).strip())
-                fc = float(currentFrame / 100) / float(totalFrames)
-                updateCompletion(comp + fc)
+            # Read chunks, not lines: synfig prints progress without newlines
+            chunk = out.stdout.read(4096)
+            if chunk:
+                text = chunk.decode(locale.getpreferredencoding(), errors='replace')
+                if ui.is_verbose():
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                buf += text
+                matches = list(frameNumberPattern.finditer(buf))
+                if matches:
+                    m = matches[-1]
+                    buf = buf[m.end():]
+                    fc = float(m.group(1)) / float(m.group(2))
+                    updateCompletion(comp + fc)
+                elif len(buf) > 4096:
+                    buf = buf[-1024:]
             rc = out.poll()
+            if not chunk and rc is not None:
+                break
 
         ui.info('====================================================')
         ui.info('  Synfig command returns with code %d' % rc)
