@@ -248,7 +248,7 @@ class RenderChan():
             last_task = None
             is_dirty = None
 
-            if not ui.is_verbose() and self.renderfarm_engine == "" and not (dependenciesOnly or allocateOnly) \
+            if not ui.is_verbose() and self.renderfarm_engine == "" and not allocateOnly \
                     and stereo not in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
                 # Quiet mode: cheap dry-run pass to show the "Resolving dependencies" block
                 # before any rendering starts. Analysis is cached, so this costs almost nothing.
