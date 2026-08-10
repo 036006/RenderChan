@@ -266,40 +266,52 @@ class RenderChan():
                 self._counting_deps = False
                 ui.progress_stop()
                 ui.progress_start()  # restart for the rendering phases
+
+                adjacency = {}
+                for parent, child in self._dep_edges:
+                    adjacency.setdefault(parent, []).append(child)
+                root_path = taskfile.getPath()
+                project_path = taskfile.project.path if taskfile.project else None
+                has_missing_cache = {}
+
+                def has_missing(path, seeing=frozenset()):
+                    if path in self._missing_abspaths:
+                        return True
+                    if path in has_missing_cache:
+                        return has_missing_cache[path]
+                    if path in seeing:
+                        return False
+                    result = any(has_missing(c, seeing | {path}) for c in adjacency.get(path, []))
+                    has_missing_cache[path] = result
+                    return result
+
+                def disp(path):
+                    return os.path.relpath(path, project_path) if project_path else path
+
+                def print_tree(path, subset, warn, recurse_into, seen=None):
+                    seen = seen if seen is not None else set()
+                    if path in seen:
+                        return
+                    seen.add(path)
+                    ui.intro(disp(path), warn=warn)
+                    own = [c for c in adjacency.get(path, []) if c in subset and not adjacency.get(c)]
+                    for d, text in ui.path_tree_lines([disp(c) for c in own]):
+                        ui.log_line("  " * d + text)
+                    for c in adjacency.get(path, []):
+                        if recurse_into(c):
+                            print_tree(c, subset, warn, recurse_into, seen)
+                    ui.section_end()
+
+                if dependenciesOnly:
+                    found = self._counted_deps - self._missing_abspaths
+                    ui.intro("Found dependencies")
+                    print_tree(root_path, found, False, lambda c: c in found and bool(adjacency.get(c)))
+                    ui.outro("%d found" % len(found))
+
                 if self._missing_abspaths:
-                    adjacency = {}
-                    for parent, child in self._dep_edges:
-                        adjacency.setdefault(parent, []).append(child)
-                    root_path = taskfile.getPath()
-                    project_path = taskfile.project.path if taskfile.project else None
-                    has_missing_cache = {}
-
-                    def has_missing(path, seeing=frozenset()):
-                        if path in self._missing_abspaths:
-                            return True
-                        if path in has_missing_cache:
-                            return has_missing_cache[path]
-                        if path in seeing:
-                            return False
-                        result = any(has_missing(c, seeing | {path}) for c in adjacency.get(path, []))
-                        has_missing_cache[path] = result
-                        return result
-
-                    def disp(path):
-                        return os.path.relpath(path, project_path) if project_path else path
-
-                    def print_node(path):
-                        ui.intro(disp(path), warn=True)
-                        own = [c for c in adjacency.get(path, []) if c in self._missing_abspaths]
-                        for d, text in ui.path_tree_lines([disp(c) for c in own]):
-                            ui.log_line("  " * d + text)
-                        for c in adjacency.get(path, []):
-                            if c not in self._missing_abspaths and has_missing(c):
-                                print_node(c)
-                        ui.section_end()
-
                     ui.intro("Missing dependencies")
-                    print_node(root_path)
+                    print_tree(root_path, self._missing_abspaths, True,
+                               lambda c: c not in self._missing_abspaths and has_missing(c))
                     ui.outro("%d missing" % len(self._missing_abspaths))
 
             if stereo in ("vertical","v","vertical-cross","vc","horizontal","h","horizontal-cross","hc"):
